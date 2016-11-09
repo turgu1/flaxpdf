@@ -12,6 +12,8 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Modifications Copyright (C) 2016 Guy Turcotte
 */
 
 #include "main.h"
@@ -374,7 +376,7 @@ bool loadfile(const char *file, recent_file_struct *recent_files) {
 	relative[79] = '\0';
 
 	char tmp[160];
-	snprintf(tmp, 160, "%s - FlaxPDF", relative);
+	snprintf(tmp, 160, "%s - uPDF", relative);
 	win->copy_label(tmp);
 
 	// Update page count

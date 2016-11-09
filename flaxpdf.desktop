@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-TryExec=flaxpdf
+TryExec=updf
 Encoding=UTF-8
-Name=FlaxPDF
+Name=uPDF
 GenericName=PDF viewer
-Exec=flaxpdf %u
+Exec=updf %u
 Terminal=false
 Categories=Application;FLTK;Viewer;Office;
-Icon=flaxpdf.png
+Icon=updf.png
 MimeType=application/pdf;
 Comment=PDF viewer
 Type=Application

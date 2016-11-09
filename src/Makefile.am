@@ -1,6 +1,6 @@
-bin_PROGRAMS = flaxpdf
+bin_PROGRAMS = updf
 
-flaxpdf_SOURCES = main.cpp main.h loadfile.cpp gettext.h \"icons 32x32.h\" wmicon.h \
+updf_SOURCES = main.cpp main.h loadfile.cpp gettext.h \"icons 32x32.h\" "updf 128x128.h" \
 			lrtypes.h macros.h helpers.h helpers.cpp \
 			view.cpp view.h config.cpp config.h 
 

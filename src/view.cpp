@@ -19,6 +19,8 @@ The pdfview class has been modified extensively to allow for multiple
 columns visualization of a document. You can think of this view as a
 matrix of pages, each line of this matrix composed of as many columns
 as required by the user.
+
+Modifications Copyright (C) 2016 Guy Turcotte
 */
 
 #include "view.h"

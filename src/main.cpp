@@ -12,10 +12,12 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+Modifications Copyright (C) 2016 Guy Turcotte
 */
 
 #include "main.h"
-#include "wmicon.h"
+#include "updf 128x128.h"
 //#include "icons.h"
 #include "icons 32x32.h"
 #include <FL/Fl_File_Icon.H>
@@ -372,8 +374,8 @@ int main(int argc, char **argv) {
 
 	#if ENABLE_NLS
 	setlocale(LC_MESSAGES, "");
-	bindtextdomain("flaxpdf", LOCALEDIR);
-	textdomain("flaxpdf");
+	bindtextdomain("updf", LOCALEDIR);
+	textdomain("updf");
 	#endif
 
 	const struct option opts[] = {
@@ -584,8 +586,8 @@ int main(int argc, char **argv) {
 	win->size_range(500, 500);
 	win->end();
 
-	Fl_PNG_Image wmicon("wmicon.png", img(wmicon_png));
-	win->icon(&wmicon);
+	Fl_PNG_Image updf_icon("updf 128x128.png", img(updf_128x128_png));
+	win->icon(&updf_icon);
 
 	fl_open_display();
 	win->show();

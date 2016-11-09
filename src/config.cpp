@@ -112,7 +112,7 @@ void load_config() {
 	}
 
 	strncpy(config_filename, homedir, 300);
-	strncat(config_filename, "/.flaxpdf", 300 - strlen(config_filename) - 1);
+	strncat(config_filename, "/.updf", 300 - strlen(config_filename) - 1);
 
 	try {
 		cfg.readFile(config_filename);
@@ -196,7 +196,7 @@ void save_config() {
 	}
 
 	strncpy(config_filename, homedir, 300);
-	strncat(config_filename, "/.flaxpdf", 300 - strlen(config_filename) - 1);
+	strncat(config_filename, "/.updf", 300 - strlen(config_filename) - 1);
 
 	try {
 		Setting &root = cfg.getRoot();
