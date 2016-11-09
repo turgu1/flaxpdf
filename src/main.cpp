@@ -430,7 +430,7 @@ int main(int argc, char **argv) {
 
 	int pos;
 
-	win = new Fl_Double_Window(700, 700, "FlaxPDF");
+	win = new Fl_Double_Window(700, 700, "uPDF");
 	win_pack = new Fl_Pack(0, 0, 700, 700);
 	win_pack->type(1);
 

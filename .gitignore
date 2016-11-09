@@ -1,4 +1,4 @@
-flaxpdf
+updf
 *.o
 version.h
 *.mo
