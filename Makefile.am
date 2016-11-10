@@ -2,7 +2,7 @@ SUBDIRS = po src
 
 ACLOCAL_AMFLAGS = -I m4
 
-dist_pkgdata_DATA = updf-32x32.png updf-64x64.png updf-128x128.png updf-256x256.png updf-512x512.pdf
+dist_pkgdata_DATA = updf-32x32.png updf-64x64.png updf-128x128.png updf-256x256.png updf-512x512.png
 
 EXTRA_DIST = config/config.rpath updf.desktop README.asciidoc autogen.sh
 

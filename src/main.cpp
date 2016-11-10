@@ -18,6 +18,7 @@ Modifications Copyright (C) 2016 Guy Turcotte
 
 #include "main.h"
 #include "updf 128x128.h"
+#include "updf 64x64.h"
 //#include "icons.h"
 #include "icons 32x32.h"
 #include <FL/Fl_File_Icon.H>
@@ -435,7 +436,10 @@ int main(int argc, char **argv) {
 	win_pack->type(1);
 
 	{ buttons = new Fl_Pack(0, 0, 64, 700);
-		{ Fl_Button* o = new Fl_Button(0, pos = 0, 64, 32);
+		{ Fl_Box* b = new Fl_Box(0, pos = 0, 64, 64);
+			b->image(new Fl_PNG_Image("updf 64x64.png", img(updf_64x64_png)));
+		} // (Fl_Box*b )
+		{ Fl_Button* o = new Fl_Button(0, pos += 60, 64, 32);
 			o->tooltip(_("Hide toolbar (F8)"));
 			o->callback(cb_hide);
 			o->image(new Fl_PNG_Image("back.png", img(media_seek_backward_png)));
