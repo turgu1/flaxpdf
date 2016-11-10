@@ -33,7 +33,8 @@ Modifications Copyright (C) 2016 Guy Turcotte
 pdfview::pdfview(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
 		yoff(0), xoff(0),
 		selx(0), sely(0), selx2(0), sely2(0),
-		columns(1) {
+		columns(1), title_pages(1) 
+{
 
 	cachedsize = 7 * 1024 * 1024; // 7 megabytes
 
@@ -45,11 +46,13 @@ pdfview::pdfview(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
 	}
 }
 
-void pdfview::reset_selection() {
+void pdfview::reset_selection() 
+{
 	selx = sely = selx2 = sely2 = 0;
 }
 
-void pdfview::compute_screen_size() {
+void pdfview::compute_screen_size()
+{
 	screen_x = x();
 	screen_y = y();
 	screen_height = h();
@@ -57,30 +60,35 @@ void pdfview::compute_screen_size() {
 }
 
 
-void pdfview::go(const u32 page) {
+void pdfview::go(const u32 page) 
+{
 	yoff = page;
 	adjust_yoff(0);
 	reset_selection();
 	redraw();
 }
 
-void pdfview::set_columns(int count) {
+void pdfview::set_columns(int count) 
+{
 	if ((count >= 1) && (count <= 5)) {
 		columns = count;
 		redraw();
 	}
 }
 
-void pdfview::set_params(int columns_count, float x, float y) {
+void pdfview::set_params(int columns_count, int title_page_count, float x, float y) 
+{
 
 	yoff = y;
 	xoff = x;
+	title_pages = title_page_count;
 
 	set_columns(columns_count);
 	go(y);
 }
 
-void pdfview::reset() {
+void pdfview::reset() 
+{
 	yoff = 0;
 	xoff = 0;
 
@@ -94,7 +102,8 @@ void pdfview::reset() {
 	}
 }
 
-u32 pdfview::pageh(u32 page) const {
+u32 pdfview::pageh(u32 page) const 
+{
 	if (file->cache[page].ready) {
 		if (file->mode == Z_TRIM || file->mode == Z_PGTRIM)
 			return file->cache[page].h;
@@ -106,7 +115,8 @@ u32 pdfview::pageh(u32 page) const {
 	return 0;
 }
 
-u32 pdfview::pagew(u32 page) const {
+u32 pdfview::pagew(u32 page) const 
+{
 	if (file->cache[page].ready) {
 		if (file->mode == Z_TRIM || file->mode == Z_PGTRIM)
 			return file->cache[page].w;
@@ -120,22 +130,29 @@ u32 pdfview::pagew(u32 page) const {
 
 // Compute the height of a line of pages, selecting the page that is the
 // highest.
-u32 pdfview::fullh(u32 page) const {
+u32 pdfview::fullh(u32 page) const 
+{
 
 	if (!file->cache[page].ready)
 		page = 0;
 
 	u32 fh = 0;
-	u32 i;
+	u32 i, limit;
 
-	if (file->mode == Z_TRIM || file->mode == Z_PGTRIM) {
-		for (i = page; (i < (page + columns)) && (i < file->pages); i++) {
+	if ((title_pages > 0) && (title_pages < columns) && (page < title_pages))
+		limit = title_pages;
+	else
+		limit = page + columns;
+
+	if (limit > file->pages) limit = file->pages;
+
+	if (file->mode == Z_TRIM || file->mode == Z_PGTRIM)
+		for (i = page; i < limit; i++) {
 			if (file->cache[i].ready && (file->cache[i].h > fh))
 				fh = file->cache[i].h;
 		}
-	}
-	else {
-		for (i = page; (i < (page + columns)) && (i < file->pages); i++) {
+	else 
+		for (i = page; i < limit; i++) {
 			if (file->cache[i].ready) {
 				u32 h = file->cache[i].h     +
 						file->cache[i].top   +
@@ -144,18 +161,27 @@ u32 pdfview::fullh(u32 page) const {
 					fh = h;
 			}
 		}				
-	}
 
 	return fh;
 }
 
-u32 pdfview::fullw(u32 page) const {
+// Compute the width of a line of pages. The page number is the one that is
+// on the first on the left of the line.
+u32 pdfview::fullw(u32 page) const 
+{
 	u32 fw = 0;
-	u32 i;
+	u32 i, limit;
+
+	if ((title_pages > 0) && (title_pages < columns) && (page < title_pages))
+		limit = title_pages;
+	else
+		limit = page + columns;
+
+	if (limit > file->pages) limit = file->pages;
 
 	if (file->mode == Z_TRIM || file->mode == Z_PGTRIM) {
 		for (i = page; i < (page + columns); i++) {
-			if (file->cache[i].ready && (i < file->pages))
+			if (file->cache[i].ready && (i < limit))
 				fw += file->cache[i].w;
 			else
 				fw += file->cache[0].w;
@@ -163,7 +189,7 @@ u32 pdfview::fullw(u32 page) const {
 	}
 	else {
 		for (i = page; i < (page + columns); i++) {
-			if (file->cache[i].ready && (i < file->pages)) 
+			if (file->cache[i].ready && (i < limit)) 
 				fw += file->cache[i].w    +
 					  file->cache[i].left +
 					  file->cache[i].right;
@@ -178,7 +204,8 @@ u32 pdfview::fullw(u32 page) const {
 	return fw + (columns - 1) * MARGINHALF;
 }
 
-static bool hasmargins(const u32 page) {
+static bool hasmargins(const u32 page) 
+{
 	if (!file->cache[page].ready)
 		return
 	        file->cache[0].left   > MARGIN ||
@@ -193,11 +220,10 @@ static bool hasmargins(const u32 page) {
 		file->cache[page].bottom > MARGIN;
 }
 
-float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) const {
-
-    // compute the required zoom factor to fit the line of pages on the screen,
-    // according to the zoom mode parameter if not a custom zoom.
-
+// Compute the required zoom factor to fit the line of pages on the screen,
+// According to the zoom mode parameter if not a custom zoom.
+float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) const 
+{
 	const u32 line_width  = fullw(first_page);
 	const u32 line_height = fullh(first_page);
 
@@ -230,7 +256,8 @@ float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) c
 	return zoom_factor;
 }
 
-void pdfview::update_visible(const bool fromdraw) const {
+void pdfview::update_visible(const bool fromdraw) const 
+{
 
 	// From the current zoom mode and view offset, update the visible page info
 	// Will adjust the following parameters:
@@ -281,7 +308,8 @@ void pdfview::update_visible(const bool fromdraw) const {
 }
 
 // Compute the vertical screen size of a line of pages
-u32 pdfview::pxrel(u32 page) const {
+u32 pdfview::pxrel(u32 page) const 
+{
 	float zoom;
 	u32 line_width, line_height;
 	
@@ -289,7 +317,8 @@ u32 pdfview::pxrel(u32 page) const {
 	return line_height * zoom;
 }
 
-void pdfview::draw() {
+void pdfview::draw() 
+{
 
 	if (!file->cache)
 		return;
@@ -357,9 +386,13 @@ void pdfview::draw() {
 		// Do the following for each page in the line
 
 		s32 column = 0;
+		s32 limit = columns;
 		page = first_page_in_line;
 
-		while ((column < columns) && (page < file->pages)) {
+		if ((title_pages > 0) && (title_pages < columns) && (page == 0)) 
+			limit = title_pages;
+
+		while ((column < limit) && (page < file->pages)) {
 
 			cur = &file->cache[page];
 			if (!cur->ready)
@@ -438,7 +471,7 @@ void pdfview::draw() {
 
 		Y += (line_height * zoom) + zoomedmarginhalf;
 
-		first_page_in_line += columns;
+		first_page_in_line += limit;
 		current_screen_pos = Y - screen_y;
 	}
 
@@ -451,7 +484,8 @@ void pdfview::draw() {
 // columns displayed and the screen size. Start at the end of the
 // document, getting up to the point where the line of pages will be
 // out of reach on screen.
-float pdfview::maxyoff() const {
+float pdfview::maxyoff() const 
+{
 
 	float zoom, f;
 	u32   line_width, line_height, h;
@@ -486,7 +520,8 @@ float pdfview::maxyoff() const {
 
 #include <FL/fl_draw.H>
 
-void pdfview::end_of_selection() {
+void pdfview::end_of_selection() 
+{
 
 	s32 X, Y, W, H;
 	if (selx < selx2) {
@@ -574,7 +609,8 @@ void pdfview::end_of_selection() {
 	delete dev;
 }
 
-void pdfview::page_up() {
+void pdfview::page_up() 
+{
 	if (floorf(yoff) == yoff)
 		adjust_floor_yoff(-1.0f);
 	else
@@ -582,22 +618,26 @@ void pdfview::page_up() {
 	redraw();
 }
 
-void pdfview::page_down() {
+void pdfview::page_down() 
+{
 	adjust_floor_yoff(1.0f);
 	redraw();
 }
 
-void pdfview::page_top() {
+void pdfview::page_top() 
+{
 	yoff = 0.0f;
 	redraw();
 }
 
-void pdfview::page_bottom() {
+void pdfview::page_bottom() 
+{
 	yoff = maxyoff();
 	redraw();
 }
 
-int pdfview::handle(int e) {
+int pdfview::handle(int e) 
+{
 
 	if (!file->cache)
 		return Fl_Widget::handle(e);
@@ -827,7 +867,8 @@ int pdfview::handle(int e) {
 	return Fl_Widget::handle(e);
 }
 
-void pdfview::adjust_yoff(float offset) {
+void pdfview::adjust_yoff(float offset) 
+{
 
 	if (offset != 0.0f) {
 		float y = floorf(yoff); 
@@ -846,7 +887,8 @@ void pdfview::adjust_yoff(float offset) {
 	}
 }
 
-void pdfview::adjust_floor_yoff(float offset) {
+void pdfview::adjust_floor_yoff(float offset) 
+{
 
 	if (offset != 0.0f) {
 		float y = floorf(yoff); 
@@ -867,7 +909,8 @@ void pdfview::adjust_floor_yoff(float offset) {
 	}
 }
 
-u8 pdfview::iscached(const u32 page) const {
+u8 pdfview::iscached(const u32 page) const 
+{
 
 	u32 i;
 	for (i = 0; i < CACHE_MAX; i++) {
@@ -878,7 +921,8 @@ u8 pdfview::iscached(const u32 page) const {
 	return UCHAR_MAX;
 }
 
-void pdfview::docache(const u32 page) {
+void pdfview::docache(const u32 page) 
+{
 
 	// Insert it to cache. Pick the slot at random.
 	const struct cachedpage * const cur = &file->cache[page];
@@ -932,7 +976,13 @@ void pdfview::docache(const u32 page) {
 	XDestroyImage(xi);
 }
 
-void pdfview::content(const u32 page, const s32 X, const s32 Y, const u32 W, const u32 H) {
+void pdfview::content(
+	const u32 page, 
+	const s32 X, 
+	const s32 Y,
+	const u32 W, 
+	const u32 H) 
+{
 
 	// Do a gpu-accelerated bilinear blit
 	u8 c = iscached(page);

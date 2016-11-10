@@ -53,7 +53,8 @@ public:
 	inline float get_xoff() { return xoff; };
 	inline float get_yoff() { return yoff; };
 	inline int   get_columns() { return columns; };
-	void set_params(int columns_count, float x, float y);
+	inline int   get_title_page_count() { return title_pages; };
+	void set_params(int columns_count, int title_page_count, float x, float y);
 	void page_up();
 	void page_down();
 	void page_top();
@@ -87,7 +88,7 @@ private:
 
 	// Text selection coords
 	u16 selx, sely, selx2, sely2;
-	s32 columns;
+	s32 columns, title_pages;
 
 	s32 screen_x, screen_y, screen_width, screen_height;
 };

@@ -32,35 +32,37 @@ using namespace std;
 using namespace libconfig;
 
 struct recent_file_struct {
-	std::string filename;
-	int         columns;  
-	float       xoff;
-	float       yoff;
-	float       zoom;
-	int         zoom_mode;
-	int         x;        // App Window x pos
-	int         y;        // App Window y pos
-	int         width;    // App Windows width
-	int         height;   // App Window height
-	bool        fullscreen;
+    std::string filename;
+    int         columns;
+    int         title_page_count;  
+    float       xoff;
+    float       yoff;
+    float       zoom;
+    int         zoom_mode;
+    int         x;        // App Window x pos
+    int         y;        // App Window y pos
+    int         width;    // App Windows width
+    int         height;   // App Window height
+    bool        fullscreen;
 
-	struct recent_file_struct *next;
+    struct recent_file_struct *next;
 };
 
 extern recent_file_struct *recent_files;
 
 extern void save_to_config(
-		char * filename,
-		int columns,
-		float xoff,
-		float yoff,
-		float zoom,
-		int zoommode,
-		int x,
-		int y,
-		int w,
-		int h,
-		bool full);
+        char * filename,
+        int columns,
+        int title_page_count,
+        float xoff,
+        float yoff,
+        float zoom,
+        int zoommode,
+        int x,
+        int y,
+        int w,
+        int h,
+        bool full);
 
 extern void load_config();
 extern void save_config();
