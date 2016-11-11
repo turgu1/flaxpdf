@@ -15,7 +15,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 /*
-The pdfview class has been modified extensively to allow for multiple
+The PDFView class has been modified extensively to allow for multiple
 columns visualization of a document. You can think of this view as a
 matrix of pages, each line of this matrix composed of as many columns
 as required by the user.
@@ -30,10 +30,10 @@ Modifications Copyright (C) 2016 Guy Turcotte
 #define MARGIN 36
 #define MARGINHALF 18
 
-pdfview::pdfview(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
+PDFView::PDFView(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
 		yoff(0), xoff(0),
 		selx(0), sely(0), selx2(0), sely2(0),
-		columns(1), title_pages(1) 
+		columns(1), title_pages(0) 
 {
 
 	cachedsize = 7 * 1024 * 1024; // 7 megabytes
@@ -46,12 +46,12 @@ pdfview::pdfview(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
 	}
 }
 
-void pdfview::reset_selection() 
+void PDFView::reset_selection() 
 {
 	selx = sely = selx2 = sely2 = 0;
 }
 
-void pdfview::compute_screen_size()
+void PDFView::compute_screen_size()
 {
 	screen_x = x();
 	screen_y = y();
@@ -60,7 +60,7 @@ void pdfview::compute_screen_size()
 }
 
 
-void pdfview::go(const u32 page) 
+void PDFView::go(const u32 page) 
 {
 	yoff = page;
 	adjust_yoff(0);
@@ -68,7 +68,7 @@ void pdfview::go(const u32 page)
 	redraw();
 }
 
-void pdfview::set_columns(int count) 
+void PDFView::set_columns(u32 count) 
 {
 	if ((count >= 1) && (count <= 5)) {
 		columns = count;
@@ -76,7 +76,15 @@ void pdfview::set_columns(int count)
 	}
 }
 
-void pdfview::set_params(int columns_count, int title_page_count, float x, float y) 
+void PDFView::set_title_page_count(u32 count) 
+{
+	if (count <= 4) {
+		title_pages = count;
+		redraw();
+	}
+}
+
+void PDFView::set_params(u32 columns_count, u32 title_page_count, float x, float y) 
 {
 
 	yoff = y;
@@ -87,7 +95,7 @@ void pdfview::set_params(int columns_count, int title_page_count, float x, float
 	go(y);
 }
 
-void pdfview::reset() 
+void PDFView::reset() 
 {
 	yoff = 0;
 	xoff = 0;
@@ -102,7 +110,7 @@ void pdfview::reset()
 	}
 }
 
-u32 pdfview::pageh(u32 page) const 
+u32 PDFView::pageh(u32 page) const 
 {
 	if (file->cache[page].ready) {
 		if (file->mode == Z_TRIM || file->mode == Z_PGTRIM)
@@ -115,7 +123,7 @@ u32 pdfview::pageh(u32 page) const
 	return 0;
 }
 
-u32 pdfview::pagew(u32 page) const 
+u32 PDFView::pagew(u32 page) const 
 {
 	if (file->cache[page].ready) {
 		if (file->mode == Z_TRIM || file->mode == Z_PGTRIM)
@@ -130,7 +138,7 @@ u32 pdfview::pagew(u32 page) const
 
 // Compute the height of a line of pages, selecting the page that is the
 // highest.
-u32 pdfview::fullh(u32 page) const 
+u32 PDFView::fullh(u32 page) const 
 {
 
 	if (!file->cache[page].ready)
@@ -167,7 +175,7 @@ u32 pdfview::fullh(u32 page) const
 
 // Compute the width of a line of pages. The page number is the one that is
 // on the first on the left of the line.
-u32 pdfview::fullw(u32 page) const 
+u32 PDFView::fullw(u32 page) const 
 {
 	u32 fw = 0;
 	u32 i, limit;
@@ -222,7 +230,7 @@ static bool hasmargins(const u32 page)
 
 // Compute the required zoom factor to fit the line of pages on the screen,
 // According to the zoom mode parameter if not a custom zoom.
-float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) const 
+float PDFView::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) const 
 {
 	const u32 line_width  = fullw(first_page);
 	const u32 line_height = fullh(first_page);
@@ -233,7 +241,7 @@ float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) c
 		case Z_TRIM:
 		case Z_WIDTH:
 			zoom_factor = (float)screen_width / line_width;
-		break;
+			break;
 		case Z_PAGE:
 		case Z_PGTRIM:
 			if (((float)line_width / line_height) > ((float)screen_width / screen_height)) {
@@ -242,10 +250,10 @@ float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) c
 			else {
 				zoom_factor = (float)screen_height / line_height;
 			}
-		break;
+			break;
 		default:
 			zoom_factor = file->zoom;
-		break;
+			break;
 	}
 
 	width  = line_width;
@@ -256,7 +264,7 @@ float pdfview::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) c
 	return zoom_factor;
 }
 
-void pdfview::update_visible(const bool fromdraw) const 
+void PDFView::update_visible(const bool fromdraw) const 
 {
 
 	// From the current zoom mode and view offset, update the visible page info
@@ -308,7 +316,7 @@ void pdfview::update_visible(const bool fromdraw) const
 }
 
 // Compute the vertical screen size of a line of pages
-u32 pdfview::pxrel(u32 page) const 
+u32 PDFView::pxrel(u32 page) const 
 {
 	float zoom;
 	u32 line_width, line_height;
@@ -317,7 +325,7 @@ u32 pdfview::pxrel(u32 page) const
 	return line_height * zoom;
 }
 
-void pdfview::draw() 
+void PDFView::draw() 
 {
 
 	if (!file->cache)
@@ -484,7 +492,7 @@ void pdfview::draw()
 // columns displayed and the screen size. Start at the end of the
 // document, getting up to the point where the line of pages will be
 // out of reach on screen.
-float pdfview::maxyoff() const 
+float PDFView::maxyoff() const 
 {
 
 	float zoom, f;
@@ -518,9 +526,95 @@ float pdfview::maxyoff() const
 	return f;
 }
 
-#include <FL/fl_draw.H>
+// Advance the yoff position by an offset, taking into account the number
+// of columns and the title_pages count. Yoff is adjusted to correspond to
+// the first page offset to be disblayed on a line of pages. For examples:
+// 
+//    columns   title_pages   offset    yoff    new_yoff
+//
+//       3           1          1         0        1
+//       3           2          1         0        2
+//       3           2          2         0        5
+//       3           1         -1         3        1
 
-void pdfview::end_of_selection() 
+void PDFView::adjust_yoff(float offset) 
+{
+	float new_yoff = yoff;
+
+	if (offset != 0.0f) {
+		new_yoff += offset;
+		s32 diff = floorf(new_yoff) - floorf(yoff); // Number of absolute pages of difference
+
+		if ((diff != 0) && (new_yoff >= 0.0f)) {
+			// The displacement is to another line of pages
+			new_yoff += (float)diff * (columns - 1);
+			if ((title_pages > 0) && (title_pages < columns)) {
+				// There is title pages to take care of
+				if (new_yoff < 1.0f) {
+					new_yoff += (columns - title_pages);
+				}
+				else if (yoff < 1.0f) {
+					new_yoff -= (columns - title_pages);
+				}
+			}
+		}
+		
+		printf("diff: %d, yoff: %f new_yoff: %f\n", diff, yoff, new_yoff);
+
+		// 	float y = floorf(yoff); 
+		// 	yoff += offset;
+		// 	float diff = floorf(yoff) - y; // diff is the number of "line of pages" to advance
+		// 	yoff = yoff + (diff * columns) - diff; 
+	}
+
+	if (new_yoff < 0.0f)
+		new_yoff = 0.0f;
+	else {
+		float y = maxyoff();
+
+		if (new_yoff > y)
+			new_yoff = y;
+	}
+
+	yoff = new_yoff;
+}
+
+void PDFView::adjust_floor_yoff(float offset) 
+{
+	float new_yoff = floorf(yoff);
+
+	// From here, almost same code as adjust_yoff...'
+
+	if (offset != 0.0f) {
+		new_yoff += offset;
+		s32 diff = new_yoff - floorf(yoff);
+
+		if ((diff != 0) && (new_yoff >= 0.0f)) {
+			if ((title_pages > 0) && (title_pages < columns) && (yoff < 1.0f))
+				new_yoff += ((float)diff * (columns - 1)) - (columns - title_pages);
+			else
+				new_yoff += (float)diff * (columns - 1);
+		}
+
+		// float y = floorf(yoff); 
+		// yoff = y + offset;
+		// float diff = floorf(yoff) - y;
+		// yoff = yoff + (diff * columns) - diff; 
+	}
+
+	if (new_yoff < 0.0f)
+		new_yoff = 0.0f;
+	else {
+		float max = maxyoff();
+
+		if (new_yoff > max)
+			new_yoff = max;
+	}
+
+	yoff = new_yoff;
+}
+
+void PDFView::end_of_selection() 
 {
 
 	s32 X, Y, W, H;
@@ -609,7 +703,7 @@ void pdfview::end_of_selection()
 	delete dev;
 }
 
-void pdfview::page_up() 
+void PDFView::page_up() 
 {
 	if (floorf(yoff) == yoff)
 		adjust_floor_yoff(-1.0f);
@@ -618,25 +712,25 @@ void pdfview::page_up()
 	redraw();
 }
 
-void pdfview::page_down() 
+void PDFView::page_down() 
 {
 	adjust_floor_yoff(1.0f);
 	redraw();
 }
 
-void pdfview::page_top() 
+void PDFView::page_top() 
 {
 	yoff = 0.0f;
 	redraw();
 }
 
-void pdfview::page_bottom() 
+void PDFView::page_bottom() 
 {
 	yoff = maxyoff();
 	redraw();
 }
 
-int pdfview::handle(int e) 
+int PDFView::handle(int e) 
 {
 
 	if (!file->cache)
@@ -736,7 +830,7 @@ int pdfview::handle(int e)
 					if (Fl::event_ctrl())
 						yoff = 0;
 					else {
-						const s32 page = yoff;
+						const u32 page = yoff;
 						s32 sh;
 						s32 shp = sh = pxrel(page);
 						if (page >= columns)
@@ -771,7 +865,7 @@ int pdfview::handle(int e)
 						const s32 page = yoff;
 						s32 sh;
 						s32 shn = sh = pxrel(page);
-						if (page + columns <= (s32)(file->pages - 1))
+						if (page + columns <= (u32)(file->pages - 1))
 							shn = pxrel(page + columns);
 						if (screen_height >= sh)
 							/* scroll down like Page_Down */
@@ -858,58 +952,16 @@ int pdfview::handle(int e)
 			if (!file->maxw)
 				fl_cursor(FL_CURSOR_WAIT);
 			else if (selecting->value())
-				fl_cursor(FL_CURSOR_INSERT);
+				fl_cursor(FL_CURSOR_CROSS);
 			else
 				fl_cursor(FL_CURSOR_DEFAULT);
-		break;
+			break;
 	}
 
 	return Fl_Widget::handle(e);
 }
 
-void pdfview::adjust_yoff(float offset) 
-{
-
-	if (offset != 0.0f) {
-		float y = floorf(yoff); 
-		yoff += offset;
-		float diff = floorf(yoff) - y;
-		yoff = yoff + (diff * columns) - diff; 
-	}
-
-	if (yoff < 0.0f)
-		yoff = 0.0f;
-	else {
-		float y = maxyoff();
-
-		if (yoff > y)
-			yoff = y;
-	}
-}
-
-void pdfview::adjust_floor_yoff(float offset) 
-{
-
-	if (offset != 0.0f) {
-		float y = floorf(yoff); 
-		yoff = y + offset;
-		float diff = floorf(yoff) - y;
-		yoff = yoff + (diff * columns) - diff; 
-	}
-	else
-		yoff = floorf(yoff);
-
-	if (yoff < 0.0f)
-		yoff = 0.0f;
-	else {
-		float max = maxyoff();
-
-		if (yoff > max)
-			yoff = max;
-	}
-}
-
-u8 pdfview::iscached(const u32 page) const 
+u8 PDFView::iscached(const u32 page) const 
 {
 
 	u32 i;
@@ -921,7 +973,7 @@ u8 pdfview::iscached(const u32 page) const
 	return UCHAR_MAX;
 }
 
-void pdfview::docache(const u32 page) 
+void PDFView::docache(const u32 page) 
 {
 
 	// Insert it to cache. Pick the slot at random.
@@ -931,9 +983,8 @@ void pdfview::docache(const u32 page)
 	if (cur->uncompressed > cachedsize) {
 		cachedsize = cur->uncompressed;
 
-		for (i = 0; i < CACHE_MAX; i++) {
+		for (i = 0; i < CACHE_MAX; i++)
 			cache[i] = (u8 *) realloc(cache[i], cachedsize);
-		}
 	}
 
 	// Be safe
@@ -976,7 +1027,7 @@ void pdfview::docache(const u32 page)
 	XDestroyImage(xi);
 }
 
-void pdfview::content(
+void PDFView::content(
 	const u32 page, 
 	const s32 X, 
 	const s32 Y,

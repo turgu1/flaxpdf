@@ -19,9 +19,8 @@ Modifications Copyright (C) 2016 Guy Turcotte
 #include "main.h"
 #include "updf 128x128.h"
 #include "updf 64x64.h"
-//#include "icons.h"
 #include "icons 32x32.h"
-#include <FL/Fl_File_Icon.H>
+
 #include <getopt.h>
 #include <ctype.h>
 #include <cstdlib>
@@ -32,56 +31,66 @@ Modifications Copyright (C) 2016 Guy Turcotte
 using namespace std;
 using namespace libconfig;
 
-Fl_Double_Window *win = NULL;
-static Fl_Pack* win_pack = NULL;
-static Fl_Pack *buttons = NULL;
-static Fl_Button *showbtn = NULL;
-static Fl_Button *fullscreenbtn = NULL;
-static Fl_Button *recentselectbtn = NULL;
+       Fl_Double_Window  * win                     = NULL;
+       PDFView           * view                    = NULL;
+       Fl_Box            * pagectr                 = NULL;
+       Fl_Input          * pagebox                 = NULL;
+       Fl_Input_Choice   * zoombar                 = NULL;
+       Fl_Light_Button   * selecting               = NULL;
 
-static Fl_PNG_Image *fullscreen_image = NULL;
-static Fl_PNG_Image *fullscreenreverse_image = NULL;
+       Fl_Box            * debug1                  = NULL,
+                         * debug2                  = NULL,
+                         * debug3                  = NULL,
+                         * debug4                  = NULL,
+                         * debug5                  = NULL,
+                         * debug6                  = NULL,
+                         * debug7                  = NULL;
 
-Fl_Box *pagectr = (Fl_Box *) 0;
-Fl_Box *debug1 = (Fl_Box *) 0,
-       *debug2 = (Fl_Box *) 0,
-       *debug3 = (Fl_Box *) 0,
-       *debug4 = (Fl_Box *) 0,
-       *debug5 = (Fl_Box *) 0,
-       *debug6 = (Fl_Box *) 0,
-       *debug7 = (Fl_Box *) 0;
+static Fl_Pack           * win_pack                = NULL;
+static Fl_Pack           * buttons                 = NULL;
+static Fl_Button         * showbtn                 = NULL;
+static Fl_Button         * fullscreenbtn           = NULL;
+static Fl_Button         * recentselectbtn         = NULL;
 
-Fl_Input *pagebox = NULL;
-Fl_Input_Choice *zoombar = NULL;
-Fl_Choice *columns = NULL;
-Fl_Light_Button *selecting = NULL;
+static Fl_PNG_Image      * fullscreen_image        = NULL;
+static Fl_PNG_Image      * fullscreenreverse_image = NULL;
 
-Fl_Window *recent_win = NULL;
-Fl_Select_Browser *recent_select = NULL;
+static Fl_Choice         * columns                 = NULL;
+static Fl_Choice         * title_pages             = NULL;
 
-pdfview *view = NULL;
+static Fl_Window         * recent_win              = NULL;
+static Fl_Select_Browser * recent_select           = NULL;
 
-int writepipe;
+int  writepipe;
 bool fullscreen;
 
-u8 details = 0;
-openfile *file = NULL;
+u8         details = 0;
+openfile * file    = NULL;
 
 static Fl_Menu_Item menu_zoombar[] = {
-    {"Trim",   0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"Width",  0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"Page",   0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"PgTrim", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {0,0,0,0,0,0,0,0,0}
+    { "Trim",   0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "Width",  0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "Page",   0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "PgTrim", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { 0,0,0,0,0,0,0,0,0 }
 };
 
 static Fl_Menu_Item menu_columns[] = {
-    {"1 Col.", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"2 Col.", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"3 Col.", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"4 Col.", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {"5 Col.", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0},
-    {0,0,0,0,0,0,0,0,0}
+    { "1 Col", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "2 Col", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "3 Col", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "4 Col", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "5 Col", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { 0,0,0,0,0,0,0,0,0 }
+};
+
+static Fl_Menu_Item menu_title_pages[] = {
+    { "None" , 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "1 TPg", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "2 TPg", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "3 TPg", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { "4 TPg", 0, 0, 0, 0, FL_NORMAL_LABEL, 0, 14, 0 },
+    { 0,0,0,0,0,0,0,0,0 }
 };
 
 void debug(Fl_Box * ctrl, const float value, const char * hint) 
@@ -214,6 +223,10 @@ static void adjust_display_from_recent(recent_file_struct &recent)
         columns->value(recent.columns - 1);
     }
 
+    if ((recent.title_page_count >= 0) && (recent.title_page_count <= 4)) {
+        title_pages->value(recent.title_page_count);
+    }
+
     fullscreen = !recent.fullscreen; // Must be inversed...
     cb_fullscreen(NULL, NULL);       // ...as cb_fullscreen is a toggle
     
@@ -268,9 +281,8 @@ static void cb_OpenRecent(Fl_Button*, void*)
         }
         p->resizable();
     }
-    else {
+    else 
         recent_select->clear();
-    }
 
     recent_file_struct *rf = recent_files;
     while (rf != NULL) {
@@ -284,8 +296,14 @@ static void cb_OpenRecent(Fl_Button*, void*)
 
 static void cb_columns(Fl_Choice *w, void*) 
 {
-    const int idx = w->value();
-    view->set_columns(idx + 1);
+    const int cols = w->value();
+    view->set_columns(cols + 1);
+}
+
+static void cb_title_pages(Fl_Choice *tp, void*)
+{
+    const int tpages = tp->value();
+    view->set_title_page_count(tpages);
 }
 
 void cb_page_up(Fl_Button*, void*) 
@@ -522,6 +540,15 @@ int main(int argc, char **argv)
             columns->align(FL_ALIGN_CENTER);
             //columns->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
         } // Fl_Input_Choice* zoombar
+        { title_pages = new Fl_Choice(0, pos += 24, 64, 24);
+            title_pages->tooltip(_("Number of Title Pages"));
+            title_pages->callback((Fl_Callback*)cb_title_pages);
+            title_pages->menu(menu_title_pages);
+            title_pages->value(0);
+            title_pages->textsize(11);
+            title_pages->align(FL_ALIGN_CENTER);
+            //columns->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
+        } // Fl_Input_Choice* zoombar
         { Fl_Pack* page_moves = new Fl_Pack(0, pos += 24, 64, 42);
             page_moves->type(Fl_Pack::HORIZONTAL);
             { Fl_Button* o = new Fl_Button(0, 0, 32, 42);
@@ -596,7 +623,7 @@ int main(int argc, char **argv)
         showbtn->hide();
         showbtn->callback(cb_hide);
     }
-    { view = new pdfview(64, 0, 700-64, 700);
+    { view = new PDFView(64, 0, 700-64, 700);
         view->show();
     }
 

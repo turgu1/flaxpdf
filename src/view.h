@@ -40,21 +40,22 @@ struct page_pos_struct {
 	int X0, Y0, X, Y, W, H;
 };
 
-class pdfview: public Fl_Widget {
+class PDFView: public Fl_Widget {
 public:
-	pdfview(int x, int y, int w, int h);
+	PDFView(int x, int y, int w, int h);
 	void draw();
 	int handle(int e);
 
 	void go(const u32 page);
 	void reset();
 	void reset_selection();
-	void set_columns(int count);
+	void set_columns(u32 count);
+	void set_title_page_count(u32 count);
 	inline float get_xoff() { return xoff; };
 	inline float get_yoff() { return yoff; };
-	inline int   get_columns() { return columns; };
-	inline int   get_title_page_count() { return title_pages; };
-	void set_params(int columns_count, int title_page_count, float x, float y);
+	inline u32   get_columns() { return columns; };
+	inline u32   get_title_page_count() { return title_pages; };
+	void set_params(u32 columns_count, u32 title_page_count, float x, float y);
 	void page_up();
 	void page_down();
 	void page_top();
@@ -88,11 +89,11 @@ private:
 
 	// Text selection coords
 	u16 selx, sely, selx2, sely2;
-	s32 columns, title_pages;
+	u32 columns, title_pages;
 
 	s32 screen_x, screen_y, screen_width, screen_height;
 };
 
-extern pdfview *view;
+extern PDFView *view;
 
 #endif

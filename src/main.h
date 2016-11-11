@@ -41,6 +41,7 @@ Modifications Copyright (C) 2016 Guy Turcotte
 #include <FL/Fl_Light_Button.H>
 #include <FL/Fl_PNG_Image.H>
 #include <FL/Fl_Select_Browser.H>
+#include <FL/Fl_File_Icon.H>
 #include <FL/x.H>
 
 #include <PDFDoc.h>
