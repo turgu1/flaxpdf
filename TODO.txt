@@ -9,10 +9,10 @@ TODO
 - [DONE] Bug with load of a new file when the current file is still being processed -> crash
 - [DONE] When changing document, save the previous document parameters
 - [DONE] Text selection
+- [DONE] Title page(s) management: to offset rest of the document when columns > 1
 
 - Other features
 
-	- Title page(s) management: to offset rest of the document when columns > 1
 	- Get rid of the "Create Directory" icon in the open file dialog
 	- Text search
 	- Printing

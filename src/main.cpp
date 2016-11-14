@@ -227,9 +227,6 @@ static void adjust_display_from_recent(recent_file_struct &recent)
         title_pages->value(recent.title_page_count);
     }
 
-    fullscreen = !recent.fullscreen; // Must be inversed...
-    cb_fullscreen(NULL, NULL);       // ...as cb_fullscreen is a toggle
-    
     if (recent.zoom_mode == Z_CUSTOM)
         display_zoom(recent.zoom);
     else
@@ -237,12 +234,15 @@ static void adjust_display_from_recent(recent_file_struct &recent)
 
     win->damage(FL_DAMAGE_ALL);
     win->flush();
-    
+
+    fullscreen = !recent.fullscreen; // Must be inversed...
+    cb_fullscreen(NULL, NULL);       // ...as cb_fullscreen is a toggle
+
     win->position(recent.x, recent.y);
     win->size(recent.width, recent.height);
 }
 
-void cb_recent_select(Fl_Select_Browser *, void *) 
+void cb_recent_select(Fl_Select_Browser *, void *)
 {
     recent_win->hide();
 

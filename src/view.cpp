@@ -489,17 +489,32 @@ void PDFView::draw()
 }
 
 // Compute the maximum yoff value, taking care of the number of 
-// columns displayed and the screen size. Start at the end of the
+// columns displayed, title pages and the screen size. Start at the end of the
 // document, getting up to the point where the line of pages will be
 // out of reach on screen.
+//
+// Pages = 8, columns = 3, title pages = 1
+// last = 7 - (7 % 3) - (columns - title_pages) = 7 - 1 - 2 = 4 + 3 = 7
+
+// Pages = 9, columns = 3, title pages = 2
+// last = 8 - (8 % 3) - (columns - title_pages) = 8 - 2 - 1 = 5 + 3
+
+// Pages = 13, columns = 4, title pages = 1
+// last = 12 - (12 % 4) - (columns - title_pages) = 12 - 0 - 3 = 9 
 float PDFView::maxyoff() const 
 {
-
 	float zoom, f;
 	u32   line_width, line_height, h;
 
-	s32 last = file->pages - 1;
+	s32 pages = file->pages;
+	s32 last = pages - 1;
 	last    -= (last % columns);
+	if ((title_pages > 0) && (title_pages < columns)) {
+		last -= (columns - title_pages);
+		if (last < (pages - (s32)columns)) {
+			last += columns;
+		}
+	}
 
 	if (!file->cache[last].ready)
 		f = last + 0.5f;
