@@ -287,8 +287,10 @@ bool loadfile(const char *file, recent_file_struct *recent_files) {
 		}
 	}
 
-	if (!file)
+	if (!file) {
+		if (DEBUGGING) printf("No file selected\n");
 		return false;
+	}
 
 	// Refresh window
 	Fl::check();
@@ -385,7 +387,6 @@ bool loadfile(const char *file, recent_file_struct *recent_files) {
 	pagebox->value("1");
 	if (recent) {
 		::file->zoom = recent_files->zoom;
-		::file->mode = (zoommode)recent_files->zoom_mode;
 	}
 
 	view->reset();

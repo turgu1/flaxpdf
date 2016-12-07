@@ -28,8 +28,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/stat.h>
 #include <pwd.h>
 
+#include "globals.h"
+
 using namespace std;
 using namespace libconfig;
+
+struct trim_struct {
+  int X, Y, W, H;
+};
+
+struct my_trim_struct {
+  trim_struct odd, even;
+  bool initialized;  // true of the struct contains valid data
+  bool similar;      // true if even and odd are the same, odd contains the data
+};
 
 struct recent_file_struct {
     std::string filename;
@@ -38,12 +50,13 @@ struct recent_file_struct {
     float       xoff;
     float       yoff;
     float       zoom;
-    int         zoom_mode;
     int         x;        // App Window x pos
     int         y;        // App Window y pos
     int         width;    // App Windows width
     int         height;   // App Window height
     bool        fullscreen;
+    view_mode_enum view_mode;
+    my_trim_struct my_trim;
 
     struct recent_file_struct *next;
 };
@@ -57,12 +70,13 @@ extern void save_to_config(
         float xoff,
         float yoff,
         float zoom,
-        int zoommode,
+        int view_mode,
         int x,
         int y,
         int w,
         int h,
-        bool full);
+        bool full,
+        my_trim_struct &my_trim);
 
 extern void load_config();
 extern void save_config();

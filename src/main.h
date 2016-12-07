@@ -46,23 +46,28 @@ Modifications Copyright (C) 2016 Guy Turcotte
 
 #include <PDFDoc.h>
 
+#include "globals.h"
 #include "autoconfig.h"
 #include "gettext.h"
 #include "lrtypes.h"
 #include "macros.h"
 #include "helpers.h"
-#include "view.h"
 #include "config.h"
+#include "view.h"
 
 extern Fl_Double_Window *win;
 extern Fl_Box *pagectr;
 extern Fl_Input *pagebox;
 extern Fl_Input_Choice *zoombar;
-extern Fl_Light_Button *selecting;
+extern Fl_Light_Button *selecting,
+                       *selecting_trim_zone,
+                       *diff_trim_zone;
 extern Fl_Box *debug1, *debug2, *debug3, *debug4, *debug5, *debug6, *debug7;
 extern u8 details;
 
 extern int writepipe;
+
+#define DEBUGGING 0
 
 void debug(Fl_Box * ctrl, const float value, const char * hint);
 void debug(Fl_Box * ctrl, const s32   value, const char * hint);
@@ -83,14 +88,6 @@ struct cachedpage {
 	bool ready;
 };
 
-enum zoommode {
-	Z_TRIM = 0,
-	Z_WIDTH,
-	Z_PAGE,
-	Z_PGTRIM,
-	Z_CUSTOM
-};
-
 enum msg {
 	MSG_REFRESH = 0,
 	MSG_READY
@@ -108,7 +105,6 @@ struct openfile {
 	u32 last_visible;
 
 	float zoom;
-	zoommode mode;
 	pthread_t tid;
 };
 
