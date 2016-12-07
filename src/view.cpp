@@ -54,28 +54,29 @@ PDFView::PDFView(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
 // This is in support of the Z_MYTRIM view_mode
 void PDFView::trim_zone_select(bool do_select)
 {
-  //static float saved_xoff;
-  //static float saved_yoff;
-  static u32 saved_columns;
-  static bool initialized = false;
+  static float saved_xoff;
+  static float saved_yoff;
+  static u32   saved_columns;
+  static bool  initialized = false;
 
   trim_zone_selection = (view_mode == Z_MYTRIM) && do_select;
 
   if (view_mode == Z_MYTRIM) {
     if (trim_zone_selection) {
-      //saved_xoff     = xoff;
-      //saved_yoff     = yoff;
+      saved_xoff     = xoff;
+      saved_yoff     = yoff;
       saved_columns  = columns;
       initialized    = true;
       columns        = 1;
       text_selection = false;
+      yoff = floorf(yoff);
 
       reset_selection();
       redraw();
     }
     else if (initialized) {
-      //xoff    = saved_xoff;
-      //yoff    = saved_yoff;
+      xoff    = saved_xoff;
+      yoff    = saved_yoff;
       columns = saved_columns;
 
       reset_selection();
@@ -531,10 +532,10 @@ void PDFView::draw()
       fl_rectf(Xs = X, Ys = Y, Ws = W, Hs = H, pagecol);
 
       if (DEBUGGING && first_page) {
-        printf("Zoom factor: %f\n", zoom);
-        printf("Page data: Left: %d Right: %d Top: %d Bottom: %d W: %d H: %d\n",
+        debug("Zoom factor: %f\n", zoom);
+        debug("Page data: Left: %d Right: %d Top: %d Bottom: %d W: %d H: %d\n",
           cur->left, cur->right, cur->top, cur-> bottom, cur->w, cur->h);
-        printf("Page screen rectangle: X: %d Y: %d W: %d H: %d\n", X, Y, W, H);
+        debug("Page screen rectangle: X: %d Y: %d W: %d H: %d\n", X, Y, W, H);
       }
 
       const bool margins = hasmargins(page);

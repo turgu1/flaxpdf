@@ -46,14 +46,16 @@ Modifications Copyright (C) 2016 Guy Turcotte
 
 #include <PDFDoc.h>
 
+#define DEBUGGING 0
+
 #include "globals.h"
 #include "autoconfig.h"
 #include "gettext.h"
 #include "lrtypes.h"
 #include "macros.h"
-#include "helpers.h"
 #include "config.h"
 #include "view.h"
+#include "helpers.h"
 
 extern Fl_Double_Window *win;
 extern Fl_Box *pagectr;
@@ -67,45 +69,39 @@ extern u8 details;
 
 extern int writepipe;
 
-#define DEBUGGING 0
-
-void debug(Fl_Box * ctrl, const float value, const char * hint);
-void debug(Fl_Box * ctrl, const s32   value, const char * hint);
-void debug(Fl_Box * ctrl, const u32   value, const char * hint);
-
 bool loadfile(const char *, recent_file_struct *recent_files);
 
 const int MAX_COLUMNS_COUNT = 5;
 
 struct cachedpage {
-	u8 *data;
-	u32 size;
-	u32 uncompressed;
+  u8 *data;
+  u32 size;
+  u32 uncompressed;
 
-	u32 w, h;
-	u16 left, right, top, bottom;
+  u32 w, h;
+  u16 left, right, top, bottom;
 
-	bool ready;
+  bool ready;
 };
 
 enum msg {
-	MSG_REFRESH = 0,
-	MSG_READY
+  MSG_REFRESH = 0,
+  MSG_READY
 };
 
 struct openfile {
-	char * filename;
-	cachedpage *cache;
-	PDFDoc *pdf;
-	u32 maxw, maxh;
+  char * filename;
+  cachedpage *cache;
+  PDFDoc *pdf;
+  u32 maxw, maxh;
 
-	u32 pages;
+  u32 pages;
 
-	u32 first_visible;
-	u32 last_visible;
+  u32 first_visible;
+  u32 last_visible;
 
-	float zoom;
-	pthread_t tid;
+  float zoom;
+  pthread_t tid;
 };
 
 extern openfile *file;

@@ -37,8 +37,15 @@ struct trim_struct {
   int X, Y, W, H;
 };
 
+struct single_page_trim_struct {
+  int page;
+  trim_struct page_trim;
+  single_page_trim_struct *next;
+};
+
 struct my_trim_struct {
   trim_struct odd, even;
+  single_page_trim_struct *singles;
   bool initialized;  // true of the struct contains valid data
   bool similar;      // true if even and odd are the same, odd contains the data
 };

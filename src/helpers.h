@@ -23,6 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <errno.h>
 #include <sys/time.h>
+
+#include "main.h"
 #include "lrtypes.h"
 
 #define PRINTF_WARNINGS(a,b) __attribute__ ((format (printf, a, b)))
@@ -47,6 +49,19 @@ static inline u32 u32max(u32 a, u32 b) {
 	if (a > b) return a;
 	return b;
 }
+
+#if DEBUGGING
+
+  #define debug debug_it
+
+  void debug_it(char const * fmt, ...);
+  void debug_it(Fl_Box * ctrl, const float value, const char * hint);
+  void debug_it(Fl_Box * ctrl, const s32   value, const char * hint);
+  void debug_it(Fl_Box * ctrl, const u32   value, const char * hint);
+
+#else
+  #define debug(...)
+#endif
 
 #undef PRINTF_WARNINGS
 

@@ -153,3 +153,50 @@ ssize_t swrite(const int fd, const void *buf, const size_t count) {
 
 	return written;
 }
+
+#if DEBUGGING
+
+  void debug_it(char const * fmt, ...)
+  {
+    va_list ap;
+
+    va_start(ap, fmt);
+
+    vfprintf(stderr, fmt, ap);
+
+    va_end(ap);
+  }
+
+  void debug_it(Fl_Box * ctrl, const float value, const char * hint) 
+  {
+    char tmp[20];
+
+    snprintf(tmp, 20, "%5.3f", value);
+    ctrl->copy_label(tmp);
+    ctrl->tooltip(hint);
+    ctrl->redraw_label();
+  }
+
+  void debug_it(Fl_Box * ctrl, const u32 value, const char * hint) 
+  {
+    char tmp[20];
+
+    snprintf(tmp, 20, "%u", value);
+    ctrl->copy_label(tmp);
+    ctrl->tooltip(hint);
+    ctrl->redraw_label();
+    Fl::check();
+  }
+
+  void debug_it(Fl_Box * ctrl, const s32 value, const char * hint) 
+  {
+    char tmp[20];
+
+    snprintf(tmp, 20, "%d", value);
+    ctrl->copy_label(tmp);
+    ctrl->tooltip(hint);
+    ctrl->redraw_label();
+    Fl::check();
+  }
+#endif
+

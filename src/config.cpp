@@ -175,6 +175,10 @@ void load_config() {
         
         rf->view_mode = (view_mode_enum) mode;
 
+        rf->my_trim.initialized = false;
+        rf->my_trim.similar     = true;
+        rf->my_trim.singles     = NULL;
+
         if (s.exists("my_trim")) {
   
           Setting &mt = s.lookup("my_trim");
@@ -184,6 +188,8 @@ void load_config() {
             fl_alert(_("Configuration file content error: %s."), config_filename);
             return;
           }
+
+          rf->my_trim.singles = NULL;
 
           if (mt.exists("odd") && mt.exists("even")) {
             Setting &mto = mt.lookup("odd");
@@ -208,14 +214,37 @@ void load_config() {
               return;
             }
           }
-          else {
-            rf->my_trim.initialized = false;
-          }
 
-        }
-        else {
-          rf->my_trim.initialized = false;
-          rf->my_trim.similar = true;
+          if (mt.exists("singles")) {
+            Setting &mts = mt.lookup("singles");
+            single_page_trim_struct * prev = NULL,
+                                    * curr = NULL;
+
+            for (int j = 0; j < mts.getLength(); j++) {
+              
+              curr = (single_page_trim_struct *) xalloc(sizeof(single_page_trim_struct));
+              Setting &s = mts[j];
+
+              if (!(s.lookupValue("page", curr->page       ) &&
+                    s.lookupValue("x",    curr->page_trim.X) &&
+                    s.lookupValue("y",    curr->page_trim.Y) &&
+                    s.lookupValue("w",    curr->page_trim.W) &&
+                    s.lookupValue("h",    curr->page_trim.H))) {
+
+                fl_alert(_("Configuration file content error: %s."), config_filename);
+                return;
+              }
+
+              if (prev == NULL) {
+                rf->my_trim.singles = curr;
+              }
+              else {
+                prev->next = curr;
+              }
+              prev = curr;
+              curr->next = NUĹL;
+            }
+          }
         }
 
         if (prev == NULL) {
@@ -301,6 +330,23 @@ void save_config() {
         mte.add("y", Setting::TypeInt) = rf->my_trim.even.Y;
         mte.add("w", Setting::TypeInt) = rf->my_trim.even.W;
         mte.add("h", Setting::TypeInt) = rf->my_trim.even.H;
+      }
+
+      if (rf->my_trim.singles) {
+        Setting &mts = mt.add("Singles", Setting::TypeList);
+        single_page_trim_struct * curr = rf->my_trim.singles;
+
+        while (curr) {
+          Setting &s = mts.add(Setting::TypeGroup);
+
+          s.add("page", Setting::TypeInt) = curr->page;
+          s.add("x",    Setting::TypeInt) = curr->page_trim.X;
+          s.add("y",    Setting::TypeInt) = curr->page_trim.Y;
+          s.add("w",    Setting::TypeInt) = curr->page_trim.W;
+          s.add("h",    Setting::TypeInt) = curr->page_trim.H;
+
+          curr = curr->next;
+        }
       }
 
       rf = rf->next;
