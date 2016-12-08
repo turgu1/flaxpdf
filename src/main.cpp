@@ -34,17 +34,20 @@ using namespace libconfig;
 #define LABEL_SIZE   11
 #define CHOICE_SIZE   9
 
-       Fl_Double_Window  * win                     = NULL;
-       PDFView           * view                    = NULL;
-       Fl_Box            * pagectr                 = NULL,
-                         * fill_box                = NULL;
-       Fl_Input          * pagebox                 = NULL;
-       Fl_Input_Choice   * zoombar                 = NULL;
-       Fl_Light_Button   * selecting               = NULL,
+Fl_Double_Window         * win                     = NULL;
+PDFView                  * view                    = NULL;
+Fl_Input                 * page_input              = NULL;
+Fl_Input_Choice          * zoombar                 = NULL;
+Fl_Light_Button          * selecting               = NULL,
                          * selecting_trim_zone     = NULL,
                          * this_page_trim          = NULL,
                          * diff_trim_zone          = NULL;
        
+Fl_Group                 * buttons                 = NULL;
+
+Fl_Box                   * pagectr                 = NULL;
+
+#if DEBUGGING
        Fl_Box            * debug1                  = NULL,
                          * debug2                  = NULL,
                          * debug3                  = NULL,
@@ -52,19 +55,21 @@ using namespace libconfig;
                          * debug5                  = NULL,
                          * debug6                  = NULL,
                          * debug7                  = NULL;
-       
-static Fl_Pack           * win_pack                = NULL;
-static Fl_Pack           * buttons                 = NULL;
-static Fl_Pack           * my_trim_zone_params     = NULL;
-static Fl_Button         * showbtn                 = NULL;
-static Fl_Button         * fullscreenbtn           = NULL;
-static Fl_Button         * recentselectbtn         = NULL;
+#endif
 
-static Fl_PNG_Image      * fullscreen_image        = NULL;
-static Fl_PNG_Image      * fullscreenreverse_image = NULL;
+static Fl_Pack           * win_pack                = NULL,
+                         * my_trim_zone_group      = NULL,
+                         * zoom_params_group       = NULL,
+                         * trim_zone_params_group  = NULL;
 
-static Fl_Choice         * columns                 = NULL;
-static Fl_Choice         * title_pages             = NULL;
+static Fl_Button         * show_btn                = NULL,
+                         * fullscreen_btn          = NULL;
+
+static Fl_PNG_Image      * fullscreen_image        = NULL,
+                         * fullscreenreverse_image = NULL;
+
+static Fl_Choice         * columns                 = NULL,
+                         * title_pages             = NULL;
 
 static Fl_Window         * recent_win              = NULL;
 static Fl_Select_Browser * recent_select           = NULL;
@@ -123,31 +128,32 @@ void save_current_to_config()
   }
 }
 
-void cb_exit(Fl_Widget*, void*) 
+void cb_exit(Fl_Widget *, void *) 
 {
   save_current_to_config();
   save_config();
   exit(0);
 }
 
-void cb_fullscreen(Fl_Button*, void*) 
+void cb_fullscreen(Fl_Button *, void *) 
 {
   if (fullscreen) {
     fullscreen = false;
-    fullscreenbtn->image(fullscreen_image);
-    fullscreenbtn->tooltip(_("Enter Full Screen"));
+    fullscreen_btn->image(fullscreen_image);
+    fullscreen_btn->tooltip(_("Enter Full Screen"));
     win->fullscreen_off();
   }
   else {
     fullscreen = true;
-    fullscreenbtn->image(fullscreenreverse_image);
-    fullscreenbtn->tooltip(_("Exit Full Screen"));
+    fullscreen_btn->image(fullscreenreverse_image);
+    fullscreen_btn->tooltip(_("Exit Full Screen"));
     win->fullscreen();
   }
   view->take_focus();
 }
 
-static void cb_Open(Fl_Button*, void*) 
+
+static void cb_Open(Fl_Button *, void *) 
 {
   save_current_to_config();
   loadfile(NULL, NULL);
@@ -174,7 +180,7 @@ static void applyzoom(const float what)
   view->redraw();
 }
 
-static void cb_zoombar(Fl_Input_Choice *w, void*) 
+static void cb_zoombar(Fl_Input_Choice * w, void *) 
 {
   const char * const val = w->value();
   if (isdigit(val[0])) {
@@ -196,16 +202,17 @@ static void cb_zoombar(Fl_Input_Choice *w, void*)
     }
 
     if (view->mode() == Z_MYTRIM)
-      my_trim_zone_params->show();
+      my_trim_zone_group->show();
     else
-      my_trim_zone_params->hide();
+      my_trim_zone_group->hide();
+    buttons->redraw();
   }
 
   view->take_focus();
   view->redraw();
 }
 
-static void adjust_display_from_recent(recent_file_struct &recent)
+static void adjust_display_from_recent(recent_file_struct & recent)
 {
   view->set_params(recent);
   if ((recent.columns >= 1) && (recent.columns <= 5)) {
@@ -223,9 +230,9 @@ static void adjust_display_from_recent(recent_file_struct &recent)
 
 
   if (recent.view_mode == Z_MYTRIM)
-    my_trim_zone_params->show();
+    my_trim_zone_group->show();
   else
-    my_trim_zone_params->hide();
+    my_trim_zone_group->hide();
 
   win->damage(FL_DAMAGE_ALL);
   win->flush();
@@ -260,7 +267,7 @@ void cb_recent_select(Fl_Select_Browser *, void *)
   }
 }
 
-static void cb_OpenRecent(Fl_Button*, void*) 
+static void cb_OpenRecent(Fl_Button *, void *) 
 {
   if (recent_win == NULL){
     recent_win = new Fl_Window(
@@ -270,7 +277,7 @@ static void cb_OpenRecent(Fl_Button*, void*)
     p->type(1);
     {
       recent_select = new Fl_Select_Browser(0, 0, 430, 160);
-      recent_select->callback((Fl_Callback*)cb_recent_select);
+      recent_select->callback((Fl_Callback *)cb_recent_select);
       recent_select->resizable();
       recent_select->show();
     }
@@ -289,81 +296,83 @@ static void cb_OpenRecent(Fl_Button*, void*)
   recent_win->show();
 }
 
-static void cb_columns(Fl_Choice *w, void*) 
+static void cb_columns(Fl_Choice * w, void *) 
 {
   const int cols = w->value();
   view->set_columns(cols + 1);
 }
 
-static void cb_title_pages(Fl_Choice *tp, void*)
+static void cb_title_pages(Fl_Choice * tp, void *)
 {
   const int tpages = tp->value();
   view->set_title_page_count(tpages);
 }
 
-void cb_page_up(Fl_Button*, void*) 
+void cb_page_up(Fl_Button *, void *) 
 {
   view->page_up();
   view->take_focus();
 }
 
-void cb_page_down(Fl_Button*, void*) 
+void cb_page_down(Fl_Button *, void *) 
 {
   view->page_down();
   view->take_focus();
 }
 
-void cb_page_top(Fl_Button*, void*) 
+void cb_page_top(Fl_Button *, void *) 
 {
   view->page_top();
   view->take_focus();
 }
 
-void cb_page_bottom(Fl_Button*, void*) 
+void cb_page_bottom(Fl_Button *, void *) 
 {
   view->page_bottom();
   view->take_focus();
 }
 
-void cb_Zoomin(Fl_Button*, void*) 
+void cb_Zoomin(Fl_Button *, void *) 
 {
   file->zoom *= 1.2f;
   applyzoom(file->zoom);
   view->take_focus();
 }
 
-void cb_Zoomout(Fl_Button*, void*) 
+void cb_Zoomout(Fl_Button *, void *) 
 {
   file->zoom *= 0.833333;
   applyzoom(file->zoom);
   view->take_focus();
 }
 
-void cb_hide(Fl_Widget*, void*) 
+void cb_hide_show_buttons(Fl_Widget *, void *) 
 {
 
   if (buttons->visible()) {
     buttons->hide();
-    showbtn->show();
+    show_btn->show();
   } else {
-    showbtn->hide();
+    show_btn->hide();
     buttons->show();
   }
+
+
   view->take_focus();
 }
 
-static void cb_goto_page(Fl_Input *w, void*) 
+static void cb_goto_page(Fl_Input * w, void*) 
 {
-  const u32 which = atoi(w->value()) - 1;
-  if (which >= file->pages) {
+  const u32 page = atoi(w->value()) - 1;
+  if (page >= file->pages) {
     fl_alert(_("Page out of bounds"));
     return;
   }
 
-  view->go(which);
+  view->go(page);
 }
 
-static void reader(FL_SOCKET fd, void*) 
+static void reader(FL_SOCKET fd, void *) 
 {
   // A thread has something to say to the main thread.
   u8 buf;
@@ -397,26 +406,34 @@ static void checkX()
 static void cb_select_text(Fl_Widget * w, void *) 
 {
   selecting_trim_zone->value(0);
-  view->text_select(((Fl_Light_Button *)w)->value() != 0);
+  view->text_select(((Fl_Light_Button *) w)->value() != 0);
 }
 
 static void cb_select_trim_zone(Fl_Widget * w, void *)
 {
   selecting->value(0);
+  
+  if (((Fl_Light_Button *)w)->value() != 0) { 
+    trim_zone_params_group->show();
+    zoom_params_group->hide();
+  }
+  else {
+    trim_zone_params_group->hide();
+    zoom_params_group->show();    
+  }
+  buttons->redraw();
+  
   view->trim_zone_select(((Fl_Light_Button *)w)->value() != 0);
 }
 
 static void cb_diff_trim_zone_selected(Fl_Widget * w, void *)
 {
-  view->trim_zone_different(((Fl_Light_Button *)w)->value() != 0);
+  view->trim_zone_different(((Fl_Light_Button *) w)->value() != 0);
 }
 
 static void cb_this_page_trim(Fl_Widget * w, void *)
 {
-  if (selecting_trim_zone->value() == 0) ((Fl_Light_Button *)w)->value(0);
-  else {
-    view->this_page_trim(((Fl_Light_Button *)w)->value() != 0);
-  }
+  view->this_page_trim(((Fl_Light_Button *) w)->value() != 0);
 }
 
 int main(int argc, char **argv) 
@@ -425,9 +442,9 @@ int main(int argc, char **argv)
   srand(time(NULL));
 
   #if ENABLE_NLS
-  setlocale(LC_MESSAGES, "");
-  bindtextdomain("updf", LOCALEDIR);
-  textdomain("updf");
+    setlocale(LC_MESSAGES, "");
+    bindtextdomain("updf", LOCALEDIR);
+    textdomain("updf");
   #endif
 
   const struct option opts[] = {
@@ -475,224 +492,192 @@ int main(int argc, char **argv)
 
   #define img(a) a, sizeof(a)
 
-  fullscreen_image = new Fl_PNG_Image("fullscreen.png", img(view_fullscreen_png));
-  fullscreenreverse_image = new Fl_PNG_Image("fullscreenreverse.png", img(view_restore_png));
+  fullscreen_image        = new Fl_PNG_Image("fullscreen.png",        img(view_fullscreen_png));
+  fullscreenreverse_image = new Fl_PNG_Image("fullscreenreverse.png", img(view_restore_png   ));
 
   fullscreen = false;
 
-  int pos;
+  win      = new Fl_Double_Window(700, 800, "uPDF");
+  win_pack = new Fl_Pack(0, 0, 700, 800);
 
-  win = new Fl_Double_Window(700, 700, "uPDF");
-  win_pack = new Fl_Pack(0, 0, 700, 700);
   win_pack->type(1);
 
-  { buttons = new Fl_Pack(0, 0, 64, 700);
-    { Fl_Pack* buttons_a = new Fl_Pack(0, 0, 64, 700-38);
-      { Fl_Box* b = new Fl_Box(0, pos = 0, 64, 64);
-        b->image(new Fl_PNG_Image("updf 64x64.png", img(updf_64x64_png)));
-      } // (Fl_Box*b )
-      { Fl_Button* o = new Fl_Button(0, pos += 60, 64, 32);
-        o->tooltip(_("Hide toolbar (F8)"));
-        o->callback(cb_hide);
-        o->image(new Fl_PNG_Image("back.png", img(media_seek_backward_png)));
-      } // Fl_Button* o
-      { Fl_Button* o = new Fl_Button(0, pos += 32, 64, 48);
-        o->tooltip(_("Open a new file"));
-        o->callback((Fl_Callback*)cb_Open);
-        o->image(new Fl_PNG_Image("fileopen.png", img(document_open_png)));
-      } // Fl_Button* o
-      { Fl_Button* recentselectbtn = new Fl_Button(0, pos += 48, 64, 48);
-        recentselectbtn->tooltip(_("Open a recent file"));
-        recentselectbtn->callback((Fl_Callback*)cb_OpenRecent);
-        recentselectbtn->image(new Fl_PNG_Image("fileopen.png", img(emblem_documents_png)));
-      } // Fl_Button* recentselectbtn
-      { pagebox = new Fl_Input(0, pos += 48, 64, 24);
-        pagebox->value("0");
-        pagebox->callback((Fl_Callback*)cb_goto_page);
-        pagebox->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
-        pagebox->textsize(LABEL_SIZE);
-      } // Fl_Box* pagectr
-      { pagectr = new Fl_Box(0, pos += 24, 64, 24, "/ 0");
+  int pos, last;
+
+  { buttons = new Fl_Group(0, 0, 64, 800);
+    { Fl_Pack * buttons_a = new Fl_Pack(0, 0, 64, 800-38);
+      { Fl_Box * icon_box = new Fl_Box(0, pos = 0, 64, last = 64);
+        icon_box->image(new Fl_PNG_Image("updf 64x64.png", img(updf_64x64_png))); }
+      { Fl_Button * hide_btn = new Fl_Button(0, pos += last, 64, last = 32);
+        hide_btn->tooltip(_("Hide toolbar (F8)"));
+        hide_btn->callback(cb_hide_show_buttons);
+        hide_btn->image(new Fl_PNG_Image("back.png", img(media_seek_backward_png))); }
+      { Fl_Button * open_btn = new Fl_Button(0, pos += last, 64, last = 48);
+        open_btn->tooltip(_("Open a new file"));
+        open_btn->callback((Fl_Callback *)cb_Open);
+        open_btn->image(new Fl_PNG_Image("fileopen.png", img(document_open_png))); }
+      { Fl_Button * recent_select_btn = new Fl_Button(0, pos += last, 64, last = 48);
+        recent_select_btn->tooltip(_("Open a recent file"));
+        recent_select_btn->callback((Fl_Callback *)cb_OpenRecent);
+        recent_select_btn->image(new Fl_PNG_Image("fileopen.png", img(emblem_documents_png))); }
+      { page_input = new Fl_Input(0, pos += last, 64, last = 24);
+        page_input->value("0");
+        page_input->callback((Fl_Callback *)cb_goto_page);
+        page_input->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
+        page_input->textsize(LABEL_SIZE); }
+      { pagectr = new Fl_Box(0, pos += last, 64, last = 24, "/ 0");
         pagectr->tooltip(_("Document Page Count"));
         pagectr->box(FL_ENGRAVED_FRAME);
         pagectr->align(FL_ALIGN_WRAP);
-        pagectr->labelsize(LABEL_SIZE);
-      } // Fl_Box* pagectr
-      { zoombar = new Fl_Input_Choice(0, pos += 24, 64, 24);
+        pagectr->labelsize(LABEL_SIZE); }
+      { zoombar = new Fl_Input_Choice(0, pos += last, 64, last = 24);
         zoombar->tooltip(_("Preset zoom choices"));
-        zoombar->callback((Fl_Callback*)cb_zoombar);
+        zoombar->callback((Fl_Callback *)cb_zoombar);
         zoombar->menu(menu_zoombar);
         zoombar->value(0);
         zoombar->textsize(CHOICE_SIZE);
-        zoombar->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
-      } // Fl_Input_Choice* zoombar
-      { Fl_Pack* zooms = new Fl_Pack(0, pos += 24, 64, 32);
-        zooms->type(Fl_Pack::HORIZONTAL);
-        { Fl_Button* o = new Fl_Button(0, 0, 32, 32);
-          o->tooltip(_("Zoom in"));
-          o->callback((Fl_Callback*)cb_Zoomin);
-          o->image(new Fl_PNG_Image("zoomin.png", img(zoom_in_png)));
-        } // Fl_Button* o
-        { Fl_Button* o = new Fl_Button(32, 0, 32, 32);
-          o->tooltip(_("Zoom out"));
-          o->callback((Fl_Callback*)cb_Zoomout);
-          o->image(new Fl_PNG_Image("zoomout.png", img(zoom_out_png)));
-        } // Fl_Button* o
-        zooms->end();
-        zooms->show();
-      } // Fl_Pack* zooms
-      { selecting = new Fl_Light_Button(0, pos += 32, 64, 38);
-        selecting->tooltip(_("Select text"));
-        selecting->align(FL_ALIGN_CENTER);
-        selecting->image(new Fl_PNG_Image("text.png", img(edit_select_all_png)));
-        selecting->callback(cb_select_text);
-      } // Fl_Light_Button* selecting
-
-      { columns = new Fl_Choice(0, pos += 38, 64, 24);
-        columns->tooltip(_("Number of Columns"));
-        columns->callback((Fl_Callback*)cb_columns);
-        columns->menu(menu_columns);
-        columns->value(0);
-        columns->labelsize(LABEL_SIZE);
-        columns->align(FL_ALIGN_CENTER);
-      } // Fl_Input_Choice* zoombar
-      { title_pages = new Fl_Choice(0, pos += 24, 64, 24);
-        title_pages->tooltip(_("Number of Title Pages"));
-        title_pages->callback((Fl_Callback*)cb_title_pages);
-        title_pages->menu(menu_title_pages);
-        title_pages->value(0);
-        title_pages->labelsize(LABEL_SIZE);
-        title_pages->align(FL_ALIGN_CENTER);
-      } // Fl_Input_Choice* zoombar
-      { Fl_Pack* page_moves = new Fl_Pack(0, pos += 24, 64, 42);
-        page_moves->type(Fl_Pack::HORIZONTAL);
-        { Fl_Button* o = new Fl_Button(0, 0, 32, 42);
-          o->tooltip(_("Beginning of Document"));
-          o->callback((Fl_Callback*)cb_page_top);
-          o->image(new Fl_PNG_Image("pagetop.png", img(go_top_png)));
-        } // Fl_Button* o
-        { Fl_Button* o = new Fl_Button(32, 0, 32, 42);
-          o->tooltip(_("Previous Page"));
-          o->callback((Fl_Callback*)cb_page_up);
-          o->image(new Fl_PNG_Image("pageup.png", img(go_up_png)));
-        } // Fl_Button* o
-        page_moves->end();
-        page_moves->show();
-      } // Fl_Pack* page_moves
-      { Fl_Pack* page_moves2 = new Fl_Pack(0, pos += 42, 64, 42);
-        page_moves2->type(Fl_Pack::HORIZONTAL);
-        { Fl_Button* o = new Fl_Button(0, 0, 32, 42);
-          o->tooltip(_("End of Document"));
-          o->callback((Fl_Callback*)cb_page_bottom);
-          o->image(new Fl_PNG_Image("pagebottom.png", img(go_bottom_png)));
-        } // Fl_Button* o
-        { Fl_Button* o = new Fl_Button(32, 0, 32, 42);
-          o->tooltip(_("Next Page"));
-          o->callback((Fl_Callback*)cb_page_down);
-          o->image(new Fl_PNG_Image("pagedown.png", img(go_down_png)));
-        } // Fl_Button* o
-        page_moves2->end();
-        page_moves2->show();
-      } // Fl_Pack* page_moves2
-      { fullscreenbtn = new Fl_Button(0, pos += 42, 64, 38);
-        fullscreenbtn->image(fullscreen_image);
-        fullscreenbtn->callback((Fl_Callback*)cb_fullscreen);
-        fullscreenbtn->tooltip(_("Enter Full Screen"));
-      }
-
-      { my_trim_zone_params = new Fl_Pack(0, pos += 38, 64, 96);
-        { Fl_Box* trim_title = new Fl_Box(0, 0, 64, 24, "Trim Parameters");
+        zoombar->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED); }
+      { my_trim_zone_group = new Fl_Pack(0, pos += last, 64, last = 96);
+        { Fl_Box * trim_title = new Fl_Box(0, 0, 64, 24, "Trim Parameters");
           trim_title->align(FL_ALIGN_WRAP);
-          trim_title->labelsize(9);
-        } // Fl_Box* pagectr
+          trim_title->labelsize(9); }
         { selecting_trim_zone = new Fl_Light_Button(0, 24, 64, 24);
           selecting_trim_zone->tooltip(_("Select Trim Zone on a single page"));
-          selecting_trim_zone->label(" Trim");
+          selecting_trim_zone->label("Do Trim");
           selecting_trim_zone->labelsize(LABEL_SIZE);
-          selecting_trim_zone->callback(cb_select_trim_zone);
-        } // Fl_Light_Button* trim_zone
-
-        { diff_trim_zone = new Fl_Light_Button(0, 48, 64, 24);
-          diff_trim_zone->tooltip(_("Even/Odd Pages use Different Trimming"));
-          diff_trim_zone->label(" Diff");
-          diff_trim_zone->labelsize(LABEL_SIZE);
-          diff_trim_zone->callback(cb_diff_trim_zone_selected);
-        } // Fl_Light_Button* diff_trim_zone
-
-        { this_page_trim = new Fl_Light_Button(0, 48, 64, 24);
-          this_page_trim->tooltip(_("This page only"));
-          this_page_trim->label(" This");
-          this_page_trim->labelsize(LABEL_SIZE);
-          this_page_trim->callback(cb_this_page_trim);
-        } // Fl_Light_Button* diff_trim_zone
-
-        my_trim_zone_params->hide();
-        my_trim_zone_params->spacing(2);
-        my_trim_zone_params->end();
-      } // Fl_Pack* my_trim_zone
+          selecting_trim_zone->callback(cb_select_trim_zone); }
+        { trim_zone_params_group = new Fl_Pack(0, 48, 64, 48);
+          { diff_trim_zone = new Fl_Light_Button(0, 0, 64, 24);
+            diff_trim_zone->tooltip(_("Even/Odd Pages use Different Trimming"));
+            diff_trim_zone->label("Evn/Odd");
+            diff_trim_zone->labelsize(LABEL_SIZE);
+            diff_trim_zone->callback(cb_diff_trim_zone_selected); }
+          { this_page_trim = new Fl_Light_Button(0, 24, 64, 24);
+            this_page_trim->tooltip(_("This page only"));
+            this_page_trim->label("This Pg");
+            this_page_trim->labelsize(LABEL_SIZE);
+            this_page_trim->callback(cb_this_page_trim); }
+          trim_zone_params_group->hide();
+          trim_zone_params_group->spacing(2);
+          trim_zone_params_group->end(); }
+        my_trim_zone_group->hide();
+        my_trim_zone_group->spacing(2);
+        my_trim_zone_group->end(); }
+      { zoom_params_group = new Fl_Pack(0, pos += last, 64, last = 118);
+        { Fl_Pack * zooms = new Fl_Pack(0, 0, 64, 32);
+          zooms->type(Fl_Pack::HORIZONTAL);
+          { Fl_Button * o = new Fl_Button(0, 0, 32, 32);
+            o->tooltip(_("Zoom in"));
+            o->callback((Fl_Callback *)cb_Zoomin);
+            o->image(new Fl_PNG_Image("zoomin.png", img(zoom_in_png))); }
+          { Fl_Button * o = new Fl_Button(32, 0, 32, 32);
+            o->tooltip(_("Zoom out"));
+            o->callback((Fl_Callback *)cb_Zoomout);
+            o->image(new Fl_PNG_Image("zoomout.png", img(zoom_out_png))); }
+          zooms->end();
+          zooms->show(); }
+        { selecting = new Fl_Light_Button(0, 32, 64, 38);
+          selecting->tooltip(_("Select text"));
+          selecting->align(FL_ALIGN_CENTER);
+          selecting->image(new Fl_PNG_Image("text.png", img(edit_select_all_png)));
+          selecting->callback(cb_select_text); }
+        { columns = new Fl_Choice(0, 70, 64, 24);
+          columns->tooltip(_("Number of Columns"));
+          columns->callback((Fl_Callback *)cb_columns);
+          columns->menu(menu_columns);
+          columns->value(0);
+          columns->labelsize(LABEL_SIZE);
+          columns->align(FL_ALIGN_CENTER); }
+        { title_pages = new Fl_Choice(0, 94, 64, 24);
+          title_pages->tooltip(_("Number of Title Pages"));
+          title_pages->callback((Fl_Callback *)cb_title_pages);
+          title_pages->menu(menu_title_pages);
+          title_pages->value(0);
+          title_pages->labelsize(LABEL_SIZE);
+          title_pages->align(FL_ALIGN_CENTER); }
+        zoom_params_group->spacing(4);
+        zoom_params_group->show();
+        zoom_params_group->end(); }
+      { Fl_Pack * page_moves = new Fl_Pack(0, pos += last, 64, last = 42);
+        page_moves->type(Fl_Pack::HORIZONTAL);
+        { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
+          o->tooltip(_("Beginning of Document"));
+          o->callback((Fl_Callback *)cb_page_top);
+          o->image(new Fl_PNG_Image("pagetop.png", img(go_top_png))); }
+        { Fl_Button * o = new Fl_Button(32, 0, 32, 42);
+          o->tooltip(_("Previous Page"));
+          o->callback((Fl_Callback *)cb_page_up);
+          o->image(new Fl_PNG_Image("pageup.png", img(go_up_png))); }
+        page_moves->end();
+        page_moves->show(); }
+      { Fl_Pack * page_moves2 = new Fl_Pack(0, pos += last, 64, last = 42);
+        page_moves2->type(Fl_Pack::HORIZONTAL);
+        { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
+          o->tooltip(_("End of Document"));
+          o->callback((Fl_Callback *)cb_page_bottom);
+          o->image(new Fl_PNG_Image("pagebottom.png", img(go_bottom_png))); }
+        { Fl_Button * o = new Fl_Button(32, 0, 32, 42);
+          o->tooltip(_("Next Page"));
+          o->callback((Fl_Callback *)cb_page_down);
+          o->image(new Fl_PNG_Image("pagedown.png", img(go_down_png))); }
+        page_moves2->end();
+        page_moves2->show(); }
+      { fullscreen_btn = new Fl_Button(0, pos += last, 64, last = 38);
+        fullscreen_btn->image(fullscreen_image);
+        fullscreen_btn->callback((Fl_Callback *)cb_fullscreen);
+        fullscreen_btn->tooltip(_("Enter Full Screen")); }
 
       #if DEBUGGING
-        { debug1 = new Fl_Box(0, pos += 96, 64, 32, "");
-          debug1->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug1
-        { debug2 = new Fl_Box(0, pos += 32, 64, 32, "");
-          debug2->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug2
-        { debug3 = new Fl_Box(0, pos += 32, 64, 32, "");
-          debug3->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug3
-        { debug4 = new Fl_Box(0, pos += 32, 64, 32, "");
-          debug4->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug4
-        { debug5 = new Fl_Box(0, pos += 32, 64, 32, "");
-          debug5->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug5
-        { debug6 = new Fl_Box(0, pos += 32, 64, 32, "");
-          debug6->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug6
-        { debug7 = new Fl_Box(0, pos += 32, 64, 32, "");
-          debug7->align(FL_ALIGN_WRAP);
-        } // Fl_Box* debug7
+        { debug1 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug1->align(FL_ALIGN_WRAP); }
+        { debug2 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug2->align(FL_ALIGN_WRAP); }
+        { debug3 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug3->align(FL_ALIGN_WRAP); }
+        { debug4 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug4->align(FL_ALIGN_WRAP); }
+        { debug5 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug5->align(FL_ALIGN_WRAP); }
+        { debug6 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug6->align(FL_ALIGN_WRAP); }
+        { debug7 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug7->align(FL_ALIGN_WRAP); }
+        pos += 32;
       #endif
 
-      { fill_box = new Fl_Box(0, pos += 72, 64, 64, "");
-        buttons_a->resizable(fill_box);
-      }
-
-      buttons->resizable(buttons_a);
+      { Fl_Box * fill_box = new Fl_Box(0, pos += last, 64, 800-38-pos, "");
+        //fill_box->box(FL_ENGRAVED_FRAME);
+        buttons_a->resizable(fill_box); }
+      
       buttons_a->end();
       buttons_a->spacing(4);
       buttons_a->show();
-    } // Fl_Pack* buttons_a
+      buttons->resizable(buttons_a); }
 
-    Fl_Pack* buttons_b = new Fl_Pack(0,650, 64, 38);
-    {
-      { Fl_Button* exitbtn = new Fl_Button(0, 0, 64, 38);
-        exitbtn->callback((Fl_Callback*)cb_exit);
+    { Fl_Pack * buttons_b = new Fl_Pack(0, 800-38, 64, 38);
+      { Fl_Button * exitbtn = new Fl_Button(0, 0, 64, 38);
+        exitbtn->callback((Fl_Callback *)cb_exit);
         exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
-        exitbtn->tooltip(_("Exit"));
-      }
+        exitbtn->tooltip(_("Exit")); }
       buttons_b->end();
-      buttons_b->show();
-    }
-
+      buttons_b->show(); }
     buttons->end();
     buttons->show();
   }
-  { showbtn = new Fl_Button(0, 0, 6, 700);
-    showbtn->hide();
-    showbtn->callback(cb_hide);
+  { show_btn = new Fl_Button(0, 0, 6, 800);
+    show_btn->hide();
+    show_btn->callback(cb_hide_show_buttons);
   }
-  { view = new PDFView(64, 0, 700-64, 700);
+  { view = new PDFView(64, 0, 700-64, 800);
     view->show();
   }
 
-  Fl_Group::current()->resizable(view);
+  win_pack->resizable(view);
   win_pack->end();
   win_pack->show();
 
   win->resizable(win_pack);
-  win->callback((Fl_Callback*)cb_exit);
+  win->callback((Fl_Callback *)cb_exit);
   win->size_range(500, 500);
   win->end();
 
@@ -705,20 +690,23 @@ int main(int argc, char **argv)
 
   #undef img
 
-  if (lzo_init() != LZO_E_OK)
+  if (lzo_init() != LZO_E_OK) {
     die(_("LZO init failed\n"));
+  }
 
   // Set the width to half of the screen, 90% of height
-  //win->size(Fl::w() * 0.4f, Fl::h() * 0.9f);
+  // win->size(Fl::w() * 0.4f, Fl::h() * 0.9f);
 
   load_config();
 
   bool used_recent = false;
 
-  if (optind < argc)
+  if (optind < argc) {
     used_recent = loadfile(argv[optind], recent_files);
-  else
+  }
+  else {
     used_recent = loadfile(NULL, recent_files);
+  }
 
   if (used_recent) {
     debug("Recent found\n");

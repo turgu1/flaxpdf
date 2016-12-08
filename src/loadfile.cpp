@@ -384,7 +384,7 @@ bool loadfile(const char *file, recent_file_struct *recent_files) {
 	// Update page count
 	sprintf(tmp, "/ %u", ::file->pages);
 	pagectr->copy_label(tmp);
-	pagebox->value("1");
+	page_input->value("1");
 	if (recent) {
 		::file->zoom = recent_files->zoom;
 	}

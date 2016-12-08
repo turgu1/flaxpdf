@@ -56,7 +56,7 @@ class PDFView: public Fl_Widget {
 public:
   PDFView(int x, int y, int w, int h);
   void draw();
-  int handle(int e);
+  int  handle(int e);
 
   void go(const float page);
   void reset();
@@ -81,7 +81,7 @@ public:
   void page_top();
   void page_bottom();
 private:
-  void clear_my_trim();
+  void  clear_my_trim();
   void  compute_screen_size();
   float line_zoom_factor(u32 first_page, u32 &width,u32 &height) const;
   void  update_visible(const bool fromdraw) const;
@@ -95,6 +95,8 @@ private:
   void  end_of_selection();
   void  add_single_page_trim(s32 page, s32 X, s32 Y, s32 W, s32 H);
   trim_zone_loc_enum get_trim_zone_loc(s32 x, s32 y) const;
+  const trim_struct * get_trimming_for_page(s32 page, bool update_screen = true); const;
+  void  show_trim();
   u32   pageh(u32 page) const;
   u32   pagew(u32 page) const;
   u32   fullh(u32 page) const;
@@ -107,7 +109,7 @@ private:
 
   float  yoff, xoff;
   u32    cachedsize;
-  u8    *cache[CACHE_MAX];
+  u8   * cache[CACHE_MAX];
   u16    cachedpage[CACHE_MAX];
   Pixmap pix[CACHE_MAX];
 

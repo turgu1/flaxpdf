@@ -31,11 +31,14 @@ as required by the user.
 #define MARGINHALF 18
 
 PDFView::PDFView(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
-    text_selection(false), trim_zone_selection(false), single_page_trim(false),
+    text_selection(false), 
+    trim_zone_selection(false), 
+    single_page_trim(false),
     view_mode(Z_PAGE), 
     yoff(0), xoff(0),
     selx(0), sely(0), selx2(0), sely2(0),
-    columns(1), title_pages(0)
+    columns(1), 
+    title_pages(0)
 {
   cachedsize = 7 * 1024 * 1024; // 7 megabytes
 
@@ -71,17 +74,19 @@ void PDFView::trim_zone_select(bool do_select)
       initialized    = true;
       columns        = 1;
       text_selection = false;
-      yoff = floorf(yoff);
+      yoff           = floorf(yoff);
 
       if (!my_trim.initialized) {
         s32 page = yoff;
 
         my_trim.initialized = true;
-        my_trim.similar = true;
-        my_trim.singles = NULL;
+        my_trim.similar     = true;
+        my_trim.singles     = NULL;
 
+        // Insure that the initial trim zone rectangle will be visible on screen
+        // We offset it of 25 pixels from the visible edges of the page
         my_trim.odd.X = my_trim.even.X = file->cache[page].left + 25;
-        my_trim.odd.Y = my_trim.even.Y = file->cache[page].top + 25;
+        my_trim.odd.Y = my_trim.even.Y = file->cache[page].top  + 25;
         my_trim.odd.W = my_trim.even.W = file->cache[page].w - 50;
         my_trim.odd.H = my_trim.even.H = file->cache[page].h - 50;
       }
@@ -219,6 +224,39 @@ void PDFView::new_file_loaded()
   clear_my_trim();
 }
 
+void PDFView::show_trim()
+{
+  #if DEBUGGING
+    debug("---\nTrim: Initialized: %s, Similar: %s, Singles: %s\n",
+      my_trim.initialized ? "Yes" : "No",
+      my_trim.similar ? "Yes" : "No",
+      my_trim.singles ? "Yes" : "No");
+    debug("Odd: %d %d %d %d\n",
+      my_trim.odd.X,
+      my_trim.odd.Y,
+      my_trim.odd.W,
+      my_trim.odd.H);
+    debug("Even: %d %d %d %d\n",
+      my_trim.even.X,
+      my_trim.even.Y,
+      my_trim.even.W,
+      my_trim.even.H);
+
+    single_page_trim_struct * curr = my_trim.singles;
+
+    while (curr) {
+      debug("Single page %d: %d %d %d %d\n",
+        curr->page,
+        curr->page_trim.X,
+        curr->page_trim.Y,
+        curr->page_trim.W,
+        curr->page_trim.H);
+      curr = curr->next;
+    }
+    debug("---\n");
+  #endif
+}
+
 void PDFView::set_params(recent_file_struct &recent) 
 {
   yoff        = recent.yoff;
@@ -230,6 +268,8 @@ void PDFView::set_params(recent_file_struct &recent)
   my_trim     = recent.my_trim;
 
   copy_singles(recent.my_trim, my_trim);
+
+  show_trim();
 
   set_columns(recent.columns); 
   go(yoff);
@@ -250,6 +290,32 @@ void PDFView::reset()
   }
 }
 
+const trim_struct * PDFView::get_trimming_for_page(s32 page, bool update_screen) const;
+{
+  single_page_trim_struct * curr = my_trim.singles;
+  const trim_struct * result;
+
+  debug("Finding trimming data for page %d\n", page);
+  while (curr && (curr->page < page)) curr = curr->next;
+
+  if (curr && (curr->page == page)) {
+    debug("Specific trim for page: %d\n", page);
+    result = &curr->page_trim;
+  } 
+  else {
+    if (page & 1) {
+      debug("Even...\n");
+      result = &my_trim.even;
+    }
+    else {
+      debug("Odd...\n");
+      result = &my_trim.odd;
+    }
+  }
+
+  return result;
+}
+
 u32 PDFView::pageh(u32 page) const 
 {
   if (!file->cache[page].ready) page = 0;
@@ -259,12 +325,8 @@ u32 PDFView::pageh(u32 page) const
   }
   else if (view_mode == Z_MYTRIM && !trim_zone_selection) {
     if (my_trim.initialized) {
-      if (page & 1) {
-        return my_trim.even.H;
-      }
-      else {
-        return my_trim.odd.H;
-      }
+      const trim_struct * the_trim = get_trimming_for_page(page, false);
+      return  the_trim->H;
     }
     else
       return file->cache[page].h;
@@ -285,12 +347,8 @@ u32 PDFView::pagew(u32 page) const
   }
   else if (view_mode == Z_MYTRIM && !trim_zone_selection) {
     if (my_trim.initialized) {
-      if (page & 1) {
-        return my_trim.even.W;
-      }
-      else {
-        return my_trim.odd.W;
-      }
+      const trim_struct * the_trim = get_trimming_for_page(page, false);
+      return  the_trim->W;
     }
     else {
       return file->cache[page].w;
@@ -452,7 +510,7 @@ void PDFView::update_visible(const bool fromdraw) const
   //
   // - file->first_visible
   // - file->last_visible
-  // - pagebox->value <- currently visibale page number in the upper left of the screen
+  // - page_input->value <- currently visibale page number in the upper left of the screen
   //
   // This method as been extensively modified to take into account multicolumns
   // and the fact that no page will be expected to be of the same size as the others,
@@ -484,14 +542,14 @@ void PDFView::update_visible(const bool fromdraw) const
   }
 
   // If position has changed:
-  //    - update current page visible number in the pagebox
+  //    - update current page visible number in the page_input
   //    - request a redraw (if not already called by draw...)
   if (prev != file->first_visible) {
     char buf[10];
     snprintf(buf, 10, "%u", file->first_visible + 1);
-    pagebox->value(buf);
+    page_input->value(buf);
 
-    if (!fromdraw) pagebox->redraw();
+    if (!fromdraw) page_input->redraw();
 
     Fl::check();
   }
@@ -509,7 +567,6 @@ u32 PDFView::pxrel(u32 page) const
 
 void PDFView::draw() 
 {
-
   if (!file->cache) return;
 
   compute_screen_size();
@@ -562,7 +619,8 @@ void PDFView::draw()
   while (current_screen_vpos < screen_height && (first_page_in_line < file->pages)) {
 
     float zoom;
-    u32 line_width, line_height;
+    u32   line_width, line_height;
+
     zoom = line_zoom_factor(
       /* in  */ first_page_in_line, 
       /* out */ line_width, 
@@ -577,7 +635,10 @@ void PDFView::draw()
       Y = screen_y - invisibleY * H;
     }
 
-    X = screen_x + screen_width / 2 - zoom * line_width / 2 + (zoom * xoff * line_width);
+    X = screen_x + 
+        screen_width / 2 - 
+        zoom * line_width / 2 + 
+        (zoom * xoff * line_width);
 
     // Do the following for each page in the line
 
@@ -618,7 +679,7 @@ void PDFView::draw()
       float ratio_x = 1.0f;
       float ratio_y = 1.0f;
 
-      if (view_mode == Z_MYTRIM && 
+      if ((view_mode == Z_MYTRIM) && 
           !trim_zone_selection && 
           my_trim.initialized) {
 
@@ -627,48 +688,27 @@ void PDFView::draw()
         H = zoom * cur->h;
         W = zoom * cur->w;
 
-      	if (page & 1) {
-          X -= zoom * (my_trim.even.X - cur->left);
-      		Y -= zoom * (my_trim.even.Y - cur->top);  
+        const trim_struct * the_trim = get_trimming_for_page(page);
 
-          fl_push_clip(
-            Xs + zoomedmarginhalf, 
-            Ys + zoomedmarginhalf, 
-            a = zoom * my_trim.even.W - zoomedmargin, 
-            b = zoom * my_trim.even.H - zoomedmargin);
-            
-          #if DEBUGGING
-            if (first_page) {
-              debug("My Trim: X: %d Y: %d W: %d H: %d\n",
-                my_trim.even.X,
-                my_trim.even.Y,
-                my_trim.even.W,
-                my_trim.even.H);
-              debug("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
-            }
-          #endif
-      	}
-      	else {
-          X -= zoom * (my_trim.odd.X - cur->left);
-          Y -= zoom * (my_trim.odd.Y - cur->top);
+        X -= zoom * (the_trim->X - cur->left);
+    	  Y -= zoom * (the_trim->Y - cur->top);  
 
-          fl_push_clip(
-            Xs + zoomedmarginhalf, 
-            Ys + zoomedmarginhalf, 
-            a = zoom * my_trim.odd.W - zoomedmargin, 
-            b = zoom * my_trim.odd.H - zoomedmargin);
-            
-          #if DEBUGGING
-            if (first_page) {
-              debug("My Trim: X: %d Y: %d W: %d H: %d\n",
-                my_trim.odd.X,
-                my_trim.odd.Y,
-                my_trim.odd.W,
-                my_trim.odd.H);
-              debug("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
-            }
-          #endif
-      	}
+        fl_push_clip(
+          Xs + zoomedmarginhalf, 
+          Ys + zoomedmarginhalf, 
+          a = zoom * the_trim->W - zoomedmargin, 
+          b = zoom * the_trim->H - zoomedmargin);
+          
+        #if DEBUGGING
+          if (first_page) {
+            debug("My Trim: X: %d Y: %d W: %d H: %d\n",
+              the_trim->X,
+              the_trim->Y,
+              the_trim->W,
+              the_trim->H);
+            debug("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
+          }
+        #endif
       }
 
       if (trimmed) {
@@ -686,10 +726,10 @@ void PDFView::draw()
       } 
       else if (margins) {
         // Restore the full size with empty borders
-        X += cur->left * zoom;
-        Y += cur->top  * zoom;
-        W -= (cur->left + cur->right) * zoom;
-        H -= (cur->top + cur->bottom) * zoom;
+        X +=  cur->left                * zoom;
+        Y +=  cur->top                 * zoom;
+        W -= (cur->left + cur->right ) * zoom;
+        H -= (cur->top  + cur->bottom) * zoom;
       }
 
       // Render real content
@@ -707,23 +747,20 @@ void PDFView::draw()
         fl_pop_clip();
       }
       
-      if (first_page && view_mode == Z_MYTRIM && trim_zone_selection) {
+      if (first_page && (view_mode == Z_MYTRIM) && trim_zone_selection) {
+
         if (my_trim.initialized) {
+
           s32 w, h;
-          if (page & 1) {
-            fl_overlay_rect(
-              selx = Xs + (zoom * my_trim.even.X),
-              sely = Ys + (zoom * my_trim.even.Y),
-              w = (zoom * my_trim.even.W),
-              h = (zoom * my_trim.even.H));
-          }
-          else {
-            fl_overlay_rect(
-              selx = Xs + (zoom * my_trim.odd.X),
-              sely = Ys + (zoom * my_trim.odd.Y),
-              w = (zoom * my_trim.odd.W),
-              h = (zoom * my_trim.odd.H));
-          }
+
+          const trim_struct * the_trim = get_trimming_for_page(page);
+          
+          fl_overlay_rect(
+            selx = Xs + (zoom * the_trim->X),
+            sely = Ys + (zoom * the_trim->Y),
+            w    = (zoom * the_trim->W),
+            h    = (zoom * the_trim->H));
+
           selx2 = selx + w;
           sely2 = sely + h;
 
@@ -1039,6 +1076,7 @@ void PDFView::end_of_selection()
   }
   else if (trim_zone_selection) {
     if (single_page_trim) {
+      debug("Adding a single page trim for page %d\n", pp->page);
       add_single_page_trim(pp->page, X, Y, W, H);	
     }
     else {
@@ -1061,9 +1099,9 @@ void PDFView::end_of_selection()
         my_trim.odd.H = H;
       }
       //fl_message("X: %d, Y: %d, W: %d, H: %d", X, Y, W, H);
-      debug("Selection: X: %d, Y: %d, W: %d, H: %d\n", X, Y, W, H);
       my_trim.initialized = true;
     }
+    debug("Selection: X: %d, Y: %d, W: %d, H: %d\n", X, Y, W, H);
   }
 }
 
@@ -1365,7 +1403,7 @@ int PDFView::handle(int e)
           break;
           
         case FL_F + 8:
-          cb_hide(NULL, NULL); // Hide toolbar
+          cb_hide_show_buttons(NULL, NULL); // Hide toolbar
           break;
           
         default:
