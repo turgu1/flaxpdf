@@ -31,7 +31,7 @@ as required by the user.
 #define MARGINHALF 18
 
 PDFView::PDFView(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
-    text_selection(false), trim_zone_selection(false),
+    text_selection(false), trim_zone_selection(false), single_page_trim(false),
     view_mode(Z_PAGE), 
     yoff(0), xoff(0),
     selx(0), sely(0), selx2(0), sely2(0),
@@ -62,7 +62,9 @@ void PDFView::trim_zone_select(bool do_select)
   trim_zone_selection = (view_mode == Z_MYTRIM) && do_select;
 
   if (view_mode == Z_MYTRIM) {
+  
     if (trim_zone_selection) {
+    
       saved_xoff     = xoff;
       saved_yoff     = yoff;
       saved_columns  = columns;
@@ -71,10 +73,24 @@ void PDFView::trim_zone_select(bool do_select)
       text_selection = false;
       yoff = floorf(yoff);
 
+      if (!my_trim.initialized) {
+        s32 page = yoff;
+
+        my_trim.initialized = true;
+        my_trim.similar = true;
+        my_trim.singles = NULL;
+
+        my_trim.odd.X = my_trim.even.X = file->cache[page].left + 25;
+        my_trim.odd.Y = my_trim.even.Y = file->cache[page].top + 25;
+        my_trim.odd.W = my_trim.even.W = file->cache[page].w - 50;
+        my_trim.odd.H = my_trim.even.H = file->cache[page].h - 50;
+      }
+
       reset_selection();
       redraw();
     }
     else if (initialized) {
+    
       xoff    = saved_xoff;
       yoff    = saved_yoff;
       columns = saved_columns;
@@ -89,7 +105,8 @@ void PDFView::trim_zone_different(bool diff)
 {
   bool was_similar = my_trim.similar;
   my_trim.similar = !diff;
-  if (!was_similar and my_trim.similar) {
+  
+  if (!was_similar && my_trim.similar) {
     s32 page = yoff;
 
     if (page & 1) {
@@ -99,6 +116,39 @@ void PDFView::trim_zone_different(bool diff)
       my_trim.even = my_trim.odd;
     }
   }
+}
+
+void PDFView::add_single_page_trim(s32 page, s32 X, s32 Y, s32 W, s32 H)
+{
+  single_page_trim_struct *prev, *curr, *s;
+
+  prev = NULL;
+  curr = my_trim.singles;
+  while (curr && (curr->page < page)) {
+    prev = curr;
+    curr = curr->next;
+  }
+  
+  if ((curr == NULL) || (curr->page != page)) {
+    s = (single_page_trim_struct *) xmalloc(sizeof(single_page_trim_struct));
+    s->next = curr;
+    if (prev)
+      prev->next = s;
+    else
+      my_trim.singles = s;
+    curr = s;
+  }
+  
+  curr->page        = page;
+  curr->page_trim.X = X;
+  curr->page_trim.Y = Y;
+  curr->page_trim.W = W;
+  curr->page_trim.H = H;
+}
+
+void PDFView::this_page_trim(bool this_page)
+{
+  single_page_trim = this_page;
 }
 
 // User requested text selection to copy to clipboard (or not if do_select is false)
@@ -152,6 +202,23 @@ void PDFView::set_title_page_count(u32 count)
   }
 }
 
+void PDFView::clear_my_trim()
+{
+  if (my_trim.initialized) {
+    my_trim.initialized = false;
+    my_trim.similar = true;
+
+    clear_singles(my_trim);
+  }
+  my_trim.singles = NULL;
+}
+
+
+void PDFView::new_file_loaded()
+{
+  clear_my_trim();
+}
+
 void PDFView::set_params(recent_file_struct &recent) 
 {
   yoff        = recent.yoff;
@@ -159,7 +226,10 @@ void PDFView::set_params(recent_file_struct &recent)
   view_mode   = recent.view_mode;
   title_pages = recent.title_page_count;
 
+  clear_my_trim();
   my_trim     = recent.my_trim;
+
+  copy_singles(recent.my_trim, my_trim);
 
   set_columns(recent.columns); 
   go(yoff);
@@ -456,7 +526,7 @@ void PDFView::draw()
     return;
 
   fl_overlay_clear();
-  
+
   // Paint the background with the page separation color
   fl_rectf(X, Y, W, H, FL_GRAY + 1);
 
@@ -531,12 +601,14 @@ void PDFView::draw()
       // Paint the page backgroud rectangle, save coordinates for next loop
       fl_rectf(Xs = X, Ys = Y, Ws = W, Hs = H, pagecol);
 
-      if (DEBUGGING && first_page) {
-        debug("Zoom factor: %f\n", zoom);
-        debug("Page data: Left: %d Right: %d Top: %d Bottom: %d W: %d H: %d\n",
-          cur->left, cur->right, cur->top, cur-> bottom, cur->w, cur->h);
-        debug("Page screen rectangle: X: %d Y: %d W: %d H: %d\n", X, Y, W, H);
-      }
+      #if DEBUGGING
+        if (first_page) {
+          debug("Zoom factor: %f\n", zoom);
+          debug("Page data: Left: %d Right: %d Top: %d Bottom: %d W: %d H: %d\n",
+            cur->left, cur->right, cur->top, cur-> bottom, cur->w, cur->h);
+          debug("Page screen rectangle: X: %d Y: %d W: %d H: %d\n", X, Y, W, H);
+        }
+      #endif
 
       const bool margins = hasmargins(page);
       const bool trimmed = 
@@ -564,14 +636,17 @@ void PDFView::draw()
             Ys + zoomedmarginhalf, 
             a = zoom * my_trim.even.W - zoomedmargin, 
             b = zoom * my_trim.even.H - zoomedmargin);
-          if (DEBUGGING && first_page) {
-            printf("My Trim: X: %d Y: %d W: %d H: %d\n",
-              my_trim.even.X,
-              my_trim.even.Y,
-              my_trim.even.W,
-              my_trim.even.H);
-            printf("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
-          }
+            
+          #if DEBUGGING
+            if (first_page) {
+              debug("My Trim: X: %d Y: %d W: %d H: %d\n",
+                my_trim.even.X,
+                my_trim.even.Y,
+                my_trim.even.W,
+                my_trim.even.H);
+              debug("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
+            }
+          #endif
       	}
       	else {
           X -= zoom * (my_trim.odd.X - cur->left);
@@ -582,14 +657,17 @@ void PDFView::draw()
             Ys + zoomedmarginhalf, 
             a = zoom * my_trim.odd.W - zoomedmargin, 
             b = zoom * my_trim.odd.H - zoomedmargin);
-          if (DEBUGGING && first_page) {
-            printf("My Trim: X: %d Y: %d W: %d H: %d\n",
-              my_trim.odd.X,
-              my_trim.odd.Y,
-              my_trim.odd.W,
-              my_trim.odd.H);
-            printf("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
-          }
+            
+          #if DEBUGGING
+            if (first_page) {
+              debug("My Trim: X: %d Y: %d W: %d H: %d\n",
+                my_trim.odd.X,
+                my_trim.odd.Y,
+                my_trim.odd.W,
+                my_trim.odd.H);
+              debug("Clipping: X: %d, Y: %d, W: %d, H: %d\n", Xs, Ys, a, b);
+            }
+          #endif
       	}
       }
 
@@ -615,9 +693,11 @@ void PDFView::draw()
       }
 
       // Render real content
-      if (DEBUGGING && first_page) {
-        printf("Drawing page %d: X: %d, Y: %d, W: %d, H: %d\n", page, X, Y, W, H);
-      }
+      #if DEBUGGING
+        if (first_page) {
+          debug("Drawing page %d: X: %d, Y: %d, W: %d, H: %d\n", page, X, Y, W, H);
+        }
+      #endif
 
       content(page, X, Y, W, H);
 
@@ -958,27 +1038,32 @@ void PDFView::end_of_selection()
     delete dev;
   }
   else if (trim_zone_selection) {
-    if (my_trim.similar) {
-      my_trim.odd.X = my_trim.even.X = X;
-      my_trim.odd.Y = my_trim.even.Y = Y;
-      my_trim.odd.W = my_trim.even.W = W;
-      my_trim.odd.H = my_trim.even.H = H;
-    }
-    else if (pp->page & 1) {
-      my_trim.even.X = X;
-      my_trim.even.Y = Y;
-      my_trim.even.W = W;
-      my_trim.even.H = H;
+    if (single_page_trim) {
+      add_single_page_trim(pp->page, X, Y, W, H);	
     }
     else {
-      my_trim.odd.X = X;
-      my_trim.odd.Y = Y;
-      my_trim.odd.W = W;
-      my_trim.odd.H = H;
+      if (my_trim.similar) {
+        my_trim.odd.X = my_trim.even.X = X;
+        my_trim.odd.Y = my_trim.even.Y = Y;
+        my_trim.odd.W = my_trim.even.W = W;
+        my_trim.odd.H = my_trim.even.H = H;
+      }
+      else if (pp->page & 1) {
+        my_trim.even.X = X;
+        my_trim.even.Y = Y;
+        my_trim.even.W = W;
+        my_trim.even.H = H;
+      }
+      else {
+        my_trim.odd.X = X;
+        my_trim.odd.Y = Y;
+        my_trim.odd.W = W;
+        my_trim.odd.H = H;
+      }
+      //fl_message("X: %d, Y: %d, W: %d, H: %d", X, Y, W, H);
+      debug("Selection: X: %d, Y: %d, W: %d, H: %d\n", X, Y, W, H);
+      my_trim.initialized = true;
     }
-    //fl_message("X: %d, Y: %d, W: %d, H: %d", X, Y, W, H);
-    printf("Selection: X: %d, Y: %d, W: %d, H: %d\n", X, Y, W, H);
-    my_trim.initialized = true;
   }
 }
 

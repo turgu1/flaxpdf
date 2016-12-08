@@ -64,6 +64,7 @@ public:
   void text_select(bool do_select);
   void trim_zone_select(bool do_select);
   void trim_zone_different(bool diff);
+  void this_page_trim(bool this_page);
   void set_columns(u32 count);
   void set_title_page_count(u32 count);
   inline void mode(view_mode_enum m) { view_mode = m; };
@@ -74,11 +75,13 @@ public:
   inline u32   get_title_page_count() { return title_pages; };
   inline my_trim_struct & get_my_trim() { return my_trim; };
   void set_params(recent_file_struct &recent);
+  void new_file_loaded();
   void page_up();
   void page_down();
   void page_top();
   void page_bottom();
 private:
+  void clear_my_trim();
   void  compute_screen_size();
   float line_zoom_factor(u32 first_page, u32 &width,u32 &height) const;
   void  update_visible(const bool fromdraw) const;
@@ -90,6 +93,7 @@ private:
   void  adjust_yoff(float offset);
   void  adjust_floor_yoff(float offset);
   void  end_of_selection();
+  void  add_single_page_trim(s32 page, s32 X, s32 Y, s32 W, s32 H);
   trim_zone_loc_enum get_trim_zone_loc(s32 x, s32 y) const;
   u32   pageh(u32 page) const;
   u32   pagew(u32 page) const;
@@ -98,6 +102,7 @@ private:
 
   bool   text_selection;
   bool   trim_zone_selection;
+  bool   single_page_trim;
   view_mode_enum view_mode;
 
   float  yoff, xoff;

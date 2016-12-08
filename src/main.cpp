@@ -151,6 +151,7 @@ static void cb_Open(Fl_Button*, void*)
 {
   save_current_to_config();
   loadfile(NULL, NULL);
+  view->new_file_loaded();
   view->take_focus();
 }
 
@@ -412,7 +413,10 @@ static void cb_diff_trim_zone_selected(Fl_Widget * w, void *)
 
 static void cb_this_page_trim(Fl_Widget * w, void *)
 {
-
+  if (selecting_trim_zone->value() == 0) ((Fl_Light_Button *)w)->value(0);
+  else {
+    view->this_page_trim(((Fl_Light_Button *)w)->value() != 0);
+  }
 }
 
 int main(int argc, char **argv) 

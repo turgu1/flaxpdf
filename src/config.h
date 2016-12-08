@@ -85,6 +85,9 @@ extern void save_to_config(
         bool full,
         my_trim_struct &my_trim);
 
+extern void clear_singles(my_trim_struct &my_trim);
+extern void  copy_singles(my_trim_struct &from, my_trim_struct &to);
+
 extern void load_config();
 extern void save_config();
 

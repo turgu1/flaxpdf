@@ -34,6 +34,42 @@ std::string version("ERROR");
 
 recent_file_struct *recent_files = NULL;
 
+void clear_singles(my_trim_struct &my_trim)
+{
+  single_page_trim_struct *curr, *next;
+
+  curr = my_trim.singles;
+  while (curr) {
+    next = curr->next;
+    free(curr);
+    curr = next;
+  }
+  my_trim.singles = NULL;
+}
+
+void copy_singles(my_trim_struct &from, my_trim_struct &to)
+{
+  single_page_trim_struct *curr, *curr_i, *prev;
+
+  curr_i = from.singles;
+  prev = NULL;
+  
+  while (curr_i) {
+    curr = (single_page_trim_struct *) xmalloc(sizeof(single_page_trim_struct));
+    *curr = *curr_i;
+    if (prev) {
+      prev->next = curr;
+    }
+    else {
+      to.singles = curr;
+    }
+    prev = curr;
+    curr->next = NULL;
+    curr_i = curr_i->next;
+  } 
+
+}
+
 void save_to_config(
     char * filename,
     int columns,
@@ -59,6 +95,9 @@ void save_to_config(
   }
 
   if (rf) {
+
+    clear_singles(rf->my_trim);
+
     rf->columns          = columns;
     rf->title_page_count = title_page_count;
     rf->xoff             = xoff;
@@ -71,6 +110,8 @@ void save_to_config(
     rf->height           = h;
     rf->fullscreen       = full;
     rf->my_trim          = my_trim;
+
+    copy_singles(my_trim, rf->my_trim);
 
     // prev is NULL if it's already the first entry in the list
     if (prev) {
@@ -95,6 +136,8 @@ void save_to_config(
     rf->height           = h;
     rf->fullscreen       = full;
     rf->my_trim          = my_trim;
+
+    copy_singles(my_trim, rf->my_trim);
 
     rf->next       = recent_files;
     recent_files   = rf;
@@ -222,7 +265,7 @@ void load_config() {
 
             for (int j = 0; j < mts.getLength(); j++) {
               
-              curr = (single_page_trim_struct *) xalloc(sizeof(single_page_trim_struct));
+              curr = (single_page_trim_struct *) xmalloc(sizeof(single_page_trim_struct));
               Setting &s = mts[j];
 
               if (!(s.lookupValue("page", curr->page       ) &&
@@ -242,7 +285,7 @@ void load_config() {
                 prev->next = curr;
               }
               prev = curr;
-              curr->next = NUĹL;
+              curr->next = NULL;
             }
           }
         }
@@ -333,7 +376,7 @@ void save_config() {
       }
 
       if (rf->my_trim.singles) {
-        Setting &mts = mt.add("Singles", Setting::TypeList);
+        Setting &mts = mt.add("singles", Setting::TypeList);
         single_page_trim_struct * curr = rf->my_trim.singles;
 
         while (curr) {
