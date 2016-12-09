@@ -312,24 +312,28 @@ void cb_page_up(Fl_Button *, void *)
 {
   view->page_up();
   view->take_focus();
+  update_buttons();
 }
 
 void cb_page_down(Fl_Button *, void *) 
 {
   view->page_down();
   view->take_focus();
+  update_buttons();
 }
 
 void cb_page_top(Fl_Button *, void *) 
 {
   view->page_top();
   view->take_focus();
+  update_buttons();
 }
 
 void cb_page_bottom(Fl_Button *, void *) 
 {
   view->page_bottom();
   view->take_focus();
+  update_buttons();
 }
 
 void cb_Zoomin(Fl_Button *, void *) 
@@ -357,7 +361,6 @@ void cb_hide_show_buttons(Fl_Widget *, void *)
     buttons->show();
   }
 
-
   view->take_focus();
 }
 
@@ -369,7 +372,8 @@ static void cb_goto_page(Fl_Input * w, void*)
     return;
   }
 
-  view->go(page);
+  view->goto_page(page);
+  update_buttons();
 }
 
 static void reader(FL_SOCKET fd, void *) 
@@ -413,17 +417,8 @@ static void cb_select_trim_zone(Fl_Widget * w, void *)
 {
   selecting->value(0);
   
-  if (((Fl_Light_Button *)w)->value() != 0) { 
-    trim_zone_params_group->show();
-    zoom_params_group->hide();
-  }
-  else {
-    trim_zone_params_group->hide();
-    zoom_params_group->show();    
-  }
-  buttons->redraw();
-  
   view->trim_zone_select(((Fl_Light_Button *)w)->value() != 0);
+  update_buttons();
 }
 
 static void cb_diff_trim_zone_selected(Fl_Widget * w, void *)
@@ -434,6 +429,24 @@ static void cb_diff_trim_zone_selected(Fl_Widget * w, void *)
 static void cb_this_page_trim(Fl_Widget * w, void *)
 {
   view->this_page_trim(((Fl_Light_Button *) w)->value() != 0);
+}
+
+void update_buttons()
+{
+  if (selecting_trim_zone->value() != 0) {
+    trim_zone_params_group->show();
+    zoom_params_group->hide();
+  }
+  else {
+    trim_zone_params_group->hide();
+    zoom_params_group->show();        
+  }
+
+  this_page_trim->value(view->is_single_page_trim() ? 1 : 0);
+
+  debug("Is single page trim: %s\n", view->is_single_page_trim() ? "Yes" : "No");
+
+  //buttons->redraw();
 }
 
 int main(int argc, char **argv) 

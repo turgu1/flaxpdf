@@ -119,5 +119,6 @@ extern openfile * file;
 void cb_Zoomin(Fl_Button *, void *);
 void cb_Zoomout(Fl_Button *, void *);
 void cb_hide_show_buttons(Fl_Widget *, void *);
+void update_buttons();
 
 #endif

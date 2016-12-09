@@ -90,19 +90,16 @@ void PDFView::trim_zone_select(bool do_select)
         my_trim.odd.W = my_trim.even.W = file->cache[page].w - 50;
         my_trim.odd.H = my_trim.even.H = file->cache[page].h - 50;
       }
-
-      reset_selection();
-      redraw();
     }
     else if (initialized) {
     
       xoff    = saved_xoff;
       yoff    = saved_yoff;
       columns = saved_columns;
-
-      reset_selection();
-      redraw();
     }
+
+    reset_selection();
+    page_changed();
   }
 }
 
@@ -119,6 +116,29 @@ void PDFView::trim_zone_different(bool diff)
     }
     else {
       my_trim.even = my_trim.odd;
+    }
+  }
+}
+
+void PDFView::remove_single_page_trim(s32 page)
+{
+  single_page_trim_struct *prev, *curr;
+
+  debug("Removing page %d form single page trims\n", page);
+
+  prev = NULL;
+  curr = my_trim.singles;
+  while (curr && (curr->page < page)) {
+    prev = curr;
+    curr = curr->next;
+  }
+  
+  if (curr && (curr->page == page)) {
+    if (prev) {
+      prev->next = curr->next;
+    }
+    else {
+      my_trim.singles = curr->next;
     }
   }
 }
@@ -154,6 +174,11 @@ void PDFView::add_single_page_trim(s32 page, s32 X, s32 Y, s32 W, s32 H)
 void PDFView::this_page_trim(bool this_page)
 {
   single_page_trim = this_page;
+  if (!single_page_trim) {
+    s32 page = yoff;
+    remove_single_page_trim(page);
+    page_changed();
+  }
 }
 
 // User requested text selection to copy to clipboard (or not if do_select is false)
@@ -181,12 +206,12 @@ void PDFView::compute_screen_size()
 }
 
 
-void PDFView::go(const float page) 
+void PDFView::goto_page(const float page) 
 {
   yoff = page;
   adjust_yoff(0);
   reset_selection();
-  redraw();
+  page_changed();
 }
 
 void PDFView::set_columns(u32 count) 
@@ -194,7 +219,7 @@ void PDFView::set_columns(u32 count)
   if ((count >= 1) && (count <= 5)) {
     columns = count;
     reset_selection();
-    redraw();
+    page_changed();
   }
 }
 
@@ -203,7 +228,7 @@ void PDFView::set_title_page_count(u32 count)
   if (count <= 4) {
     title_pages = count;
     reset_selection();
-    redraw();
+    page_changed();
   }
 }
 
@@ -272,7 +297,7 @@ void PDFView::set_params(recent_file_struct &recent)
   show_trim();
 
   set_columns(recent.columns); 
-  go(yoff);
+  goto_page(yoff);
 }
 
 void PDFView::reset() 
@@ -290,25 +315,36 @@ void PDFView::reset()
   }
 }
 
-const trim_struct * PDFView::get_trimming_for_page(s32 page, bool update_screen) const;
+void PDFView::page_changed()
+{
+  s32 page = yoff;
+
+  if (trim_zone_selection) {
+    single_page_trim_struct * curr = my_trim.singles;
+    while (curr && (curr->page < page)) curr = curr->next;
+
+    single_page_trim = curr && (curr->page == page);
+  }
+
+  redraw();
+}
+
+
+const trim_struct * PDFView::get_trimming_for_page(s32 page) const
 {
   single_page_trim_struct * curr = my_trim.singles;
   const trim_struct * result;
 
-  debug("Finding trimming data for page %d\n", page);
   while (curr && (curr->page < page)) curr = curr->next;
 
   if (curr && (curr->page == page)) {
-    debug("Specific trim for page: %d\n", page);
     result = &curr->page_trim;
   } 
   else {
     if (page & 1) {
-      debug("Even...\n");
       result = &my_trim.even;
     }
     else {
-      debug("Odd...\n");
       result = &my_trim.odd;
     }
   }
@@ -325,7 +361,7 @@ u32 PDFView::pageh(u32 page) const
   }
   else if (view_mode == Z_MYTRIM && !trim_zone_selection) {
     if (my_trim.initialized) {
-      const trim_struct * the_trim = get_trimming_for_page(page, false);
+      const trim_struct * the_trim = get_trimming_for_page(page);
       return  the_trim->H;
     }
     else
@@ -347,7 +383,7 @@ u32 PDFView::pagew(u32 page) const
   }
   else if (view_mode == Z_MYTRIM && !trim_zone_selection) {
     if (my_trim.initialized) {
-      const trim_struct * the_trim = get_trimming_for_page(page, false);
+      const trim_struct * the_trim = get_trimming_for_page(page);
       return  the_trim->W;
     }
     else {
@@ -1111,25 +1147,25 @@ void PDFView::page_up()
     adjust_floor_yoff(-1.0f);
   else
     adjust_floor_yoff(0.0f);
-  redraw();
+  page_changed();
 }
 
 void PDFView::page_down() 
 {
   adjust_floor_yoff(1.0f);
-  redraw();
+  page_changed();
 }
 
 void PDFView::page_top() 
 {
   yoff = 0.0f;
-  redraw();
+  page_changed();
 }
 
 void PDFView::page_bottom() 
 {
   yoff = maxyoff();
-  redraw();
+  page_changed();
 }
 
 trim_zone_loc_enum PDFView::get_trim_zone_loc(s32 x, s32 y) const
