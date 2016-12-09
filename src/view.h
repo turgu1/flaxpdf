@@ -82,6 +82,7 @@ public:
   void page_top();
   void page_bottom();
 private:
+  void  select_page_at(s32 X, s32 Y, bool two_columns);
   void  page_changed();
   void  clear_my_trim();
   void  compute_screen_size();

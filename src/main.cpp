@@ -72,7 +72,8 @@ static Fl_Choice         * columns                 = NULL,
                          * title_pages             = NULL;
 
 static Fl_Window         * recent_win              = NULL;
-static Fl_Select_Browser * recent_select           = NULL;
+static Fl_Select_Browser * recent_select           = NULL,
+                         * trim_pages_browser      = NULL;
 
 int  writepipe;
 bool fullscreen;
@@ -215,24 +216,8 @@ static void cb_zoombar(Fl_Input_Choice * w, void *)
 static void adjust_display_from_recent(recent_file_struct & recent)
 {
   view->set_params(recent);
-  if ((recent.columns >= 1) && (recent.columns <= 5)) {
-    columns->value(recent.columns - 1);
-  }
 
-  if ((recent.title_page_count >= 0) && (recent.title_page_count <= 4)) {
-    title_pages->value(recent.title_page_count);
-  }
-
-  if (recent.view_mode == Z_CUSTOM)
-    display_zoom(recent.zoom);
-  else
-    zoombar->value(menu_zoombar[recent.view_mode].text);
-
-
-  if (recent.view_mode == Z_MYTRIM)
-    my_trim_zone_group->show();
-  else
-    my_trim_zone_group->hide();
+  update_buttons();
 
   win->damage(FL_DAMAGE_ALL);
   win->flush();
@@ -240,8 +225,8 @@ static void adjust_display_from_recent(recent_file_struct & recent)
   fullscreen = !recent.fullscreen; // Must be inversed...
   cb_fullscreen(NULL, NULL);       // ...as cb_fullscreen is a toggle
 
-  win->position(recent.x, recent.y);
-  win->size(recent.width, recent.height);
+  win->resize(recent.x, recent.y, recent.width, recent.height);
+  buttons->resize(0, 0, 64, recent.height);
 }
 
 void cb_recent_select(Fl_Select_Browser *, void *)
@@ -433,6 +418,13 @@ static void cb_this_page_trim(Fl_Widget * w, void *)
 
 void update_buttons()
 {
+  if (view->mode() == Z_MYTRIM) {
+    my_trim_zone_group->show();
+  }
+  else {
+    my_trim_zone_group->hide();
+  }
+
   if (selecting_trim_zone->value() != 0) {
     trim_zone_params_group->show();
     zoom_params_group->hide();
@@ -444,9 +436,15 @@ void update_buttons()
 
   this_page_trim->value(view->is_single_page_trim() ? 1 : 0);
 
-  debug("Is single page trim: %s\n", view->is_single_page_trim() ? "Yes" : "No");
+  columns->value(view->get_columns() - 1);
+  title_pages->value(view->get_title_page_count());
 
-  //buttons->redraw();
+  if (view->mode() == Z_CUSTOM) {
+    display_zoom(file->zoom);
+  }
+  else {
+    zoombar->value(menu_zoombar[view->mode()].text);
+  }
 }
 
 int main(int argc, char **argv) 
@@ -518,7 +516,7 @@ int main(int argc, char **argv)
   int pos, last;
 
   { buttons = new Fl_Group(0, 0, 64, 800);
-    { Fl_Pack * buttons_a = new Fl_Pack(0, 0, 64, 800-38);
+    { Fl_Pack * buttons_a = new Fl_Pack(0, 0, 64, 500);
       { Fl_Box * icon_box = new Fl_Box(0, pos = 0, 64, last = 64);
         icon_box->image(new Fl_PNG_Image("updf 64x64.png", img(updf_64x64_png))); }
       { Fl_Button * hide_btn = new Fl_Button(0, pos += last, 64, last = 32);
@@ -550,16 +548,16 @@ int main(int argc, char **argv)
         zoombar->value(0);
         zoombar->textsize(CHOICE_SIZE);
         zoombar->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED); }
-      { my_trim_zone_group = new Fl_Pack(0, pos += last, 64, last = 96);
+      { my_trim_zone_group = new Fl_Pack(0, pos += last, 64, last = 160);
         { Fl_Box * trim_title = new Fl_Box(0, 0, 64, 24, "Trim Parameters");
           trim_title->align(FL_ALIGN_WRAP);
           trim_title->labelsize(9); }
         { selecting_trim_zone = new Fl_Light_Button(0, 24, 64, 24);
-          selecting_trim_zone->tooltip(_("Select Trim Zone on a single page"));
+          selecting_trim_zone->tooltip(_("Select Trim Zone"));
           selecting_trim_zone->label("Do Trim");
           selecting_trim_zone->labelsize(LABEL_SIZE);
           selecting_trim_zone->callback(cb_select_trim_zone); }
-        { trim_zone_params_group = new Fl_Pack(0, 48, 64, 48);
+        { trim_zone_params_group = new Fl_Pack(0, 48, 64, 112);
           { diff_trim_zone = new Fl_Light_Button(0, 0, 64, 24);
             diff_trim_zone->tooltip(_("Even/Odd Pages use Different Trimming"));
             diff_trim_zone->label("Evn/Odd");
@@ -570,6 +568,10 @@ int main(int argc, char **argv)
             this_page_trim->label("This Pg");
             this_page_trim->labelsize(LABEL_SIZE);
             this_page_trim->callback(cb_this_page_trim); }
+          { trim_pages_browser = new Fl_Select_Browser(0, 48, 64, 64); 
+            trim_pages_browser->labelsize(LABEL_SIZE);
+            trim_pages_browser->tooltip(_("Specific pages trim selector"));
+          }
           trim_zone_params_group->hide();
           trim_zone_params_group->spacing(2);
           trim_zone_params_group->end(); }
@@ -640,7 +642,7 @@ int main(int argc, char **argv)
         fullscreen_btn->callback((Fl_Callback *)cb_fullscreen);
         fullscreen_btn->tooltip(_("Enter Full Screen")); }
 
-      #if DEBUGGING
+      #if DEBUGGING && 0
         { debug1 = new Fl_Box(0, pos += last, 64, last = 32, "");
           debug1->align(FL_ALIGN_WRAP); }
         { debug2 = new Fl_Box(0, pos += last, 64, last = 32, "");
@@ -658,22 +660,27 @@ int main(int argc, char **argv)
         pos += 32;
       #endif
 
-      { Fl_Box * fill_box = new Fl_Box(0, pos += last, 64, 800-38-pos, "");
-        //fill_box->box(FL_ENGRAVED_FRAME);
-        buttons_a->resizable(fill_box); }
+      { Fl_Box * fill_box = new Fl_Box(0, pos += last, 64, last = 32, ""); }
+      //  fill_box->box(FL_ENGRAVED_FRAME);
+      //  buttons_a->resizable(fill_box); }
+      { Fl_Button * exitbtn = new Fl_Button(0, pos += last + 32, 64, last = 38);
+        exitbtn->callback((Fl_Callback *)cb_exit);
+        exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
+        exitbtn->tooltip(_("Exit")); }
       
       buttons_a->end();
       buttons_a->spacing(4);
       buttons_a->show();
-      buttons->resizable(buttons_a); }
+      //buttons->resizable(buttons_a); 
+    }
 
-    { Fl_Pack * buttons_b = new Fl_Pack(0, 800-38, 64, 38);
-      { Fl_Button * exitbtn = new Fl_Button(0, 0, 64, 38);
-        exitbtn->callback((Fl_Callback *)cb_exit);
-        exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
-        exitbtn->tooltip(_("Exit")); }
-      buttons_b->end();
-      buttons_b->show(); }
+    // { Fl_Pack * buttons_b = new Fl_Pack(0, pos += last, 64, last = 38);
+    //   { Fl_Button * exitbtn = new Fl_Button(0, 0, 64, 38);
+    //     exitbtn->callback((Fl_Callback *)cb_exit);
+    //     exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
+    //     exitbtn->tooltip(_("Exit")); }
+    //   buttons_b->end();
+    //   buttons_b->show(); }
     buttons->end();
     buttons->show();
   }
