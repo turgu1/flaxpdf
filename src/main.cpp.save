@@ -46,7 +46,7 @@ static Fl_Box            * pagectr                 = NULL;
 
 static PDFView           * view                    = NULL;
 
-static Fl_Pack           * buttons                 = NULL;
+static Fl_Group          * buttons                 = NULL;
 
 static Fl_Pack           * win_pack                = NULL,
                          * my_trim_zone_group      = NULL,
@@ -150,6 +150,7 @@ static void applyzoom(const float zoom)
   update_buttons();
 
   view->take_focus();
+  view->reset_selection();
   view->redraw();
 }
 
@@ -227,11 +228,10 @@ void update_buttons()
             page_input->activate();
                pagectr->activate();
                zoombar->activate();
+    my_trim_zone_group->activate();
+     zoom_params_group->activate();
             page_moves->activate();
            page_moves2->activate();
-
-    if ( zoom_params_group->visible())  zoom_params_group->activate();
-    if (my_trim_zone_group->visible()) my_trim_zone_group->activate();
   }
   else {
     
@@ -248,7 +248,6 @@ void update_buttons()
     my_trim_zone_group->show();
     if (selecting_trim_zone->value() != 0) {
       trim_zone_params_group->show();
-      diff_trim_zone->value(view->get_my_trim().similar ? 0 : 1);
       this_page_trim->value(view->is_single_page_trim() ? 1 : 0);
       zoom_params_group->hide();
     }
@@ -278,8 +277,6 @@ void update_buttons()
   char buf[10];
   snprintf(buf, 10, "%u", page + 1);
   page_input->value(buf);
-
-  buttons->damage(FL_DAMAGE_ALL);
 }
 
 void file_loaded()
@@ -472,6 +469,7 @@ void cb_zoomout(Fl_Button *, void *)
 
 void cb_hide_show_buttons(Fl_Widget *, void *) 
 {
+
   if (buttons->visible()) {
     buttons->hide();
     show_btn->show();
@@ -585,8 +583,6 @@ int main(int argc, char **argv)
   Fl::scheme("gtk+");
   Fl_File_Icon::load_system_icons();
 
-  Fl::set_font(FL_NONO_FONT, "Nono Sans Regular");
-
   file = (openfile *) xcalloc(1, sizeof(openfile));
   int ptmp[2];
   if (pipe(ptmp))
@@ -602,170 +598,184 @@ int main(int argc, char **argv)
 
   fullscreen = false;
 
+  int pos, last;
+
   win      = new Fl_Double_Window(700, 800, "uPDF");
   win_pack = new Fl_Pack(0, 0, 700, 800);
   win_pack->type(1);
-  { buttons = new Fl_Pack(0, 0, 64, 800);
-    buttons->spacing(4);
-    { Fl_Box * icon_box = new Fl_Box(0, 0, 64, 64);
-      icon_box->image(new Fl_PNG_Image("updf 64x64.png", img(updf_64x64_png))); }
-    { Fl_Button * hide_btn = new Fl_Button(0, 0, 64, 32);
-      hide_btn->tooltip(_("Hide toolbar (F8)"));
-      hide_btn->callback(cb_hide_show_buttons);
-      hide_btn->image(new Fl_PNG_Image("back.png", img(media_seek_backward_png))); }
-    { Fl_Button * open_btn = new Fl_Button(0, 0, 64, 48);
-      open_btn->tooltip(_("Open a new file"));
-      open_btn->callback((Fl_Callback *)cb_Open);
-      open_btn->image(new Fl_PNG_Image("fileopen.png", img(document_open_png))); }
-    { Fl_Button * recent_select_btn = new Fl_Button(0, 0, 64, 48);
-      recent_select_btn->tooltip(_("Open a recent file"));
-      recent_select_btn->callback((Fl_Callback *)cb_OpenRecent);
-      recent_select_btn->image(new Fl_PNG_Image("fileopen.png", img(emblem_documents_png))); }
-    { page_input = new Fl_Input(0, 0, 64, 24);
-      page_input->value("0");
-      page_input->callback((Fl_Callback *)cb_goto_page);
-      page_input->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
-      page_input->textsize(LABEL_SIZE); }
-    { pagectr = new Fl_Box(0, 0, 64, 24, "/ 0");
-      pagectr->tooltip(_("Document Page Count"));
-      pagectr->box(FL_ENGRAVED_FRAME);
-      pagectr->align(FL_ALIGN_WRAP);
-      pagectr->labelsize(LABEL_SIZE); }
-    { zoombar = new Fl_Input_Choice(0, 0, 64, 24);
-      zoombar->tooltip(_("Preset zoom choices"));
-      zoombar->callback((Fl_Callback *)cb_zoombar);
-      zoombar->menu(menu_zoombar);
-      zoombar->value(0);
-      zoombar->textsize(CHOICE_SIZE);
-      zoombar->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED); }
-    { my_trim_zone_group = new Fl_Pack(0, 0, 64, 184);
-      { Fl_Box * trim_title = new Fl_Box(0, 0, 64, 24, "Trim Parameters");
-        trim_title->align(FL_ALIGN_WRAP);
-        trim_title->labelfont(FL_TIMES);
-        trim_title->labelsize(9); }
-      { selecting_trim_zone = new Fl_Light_Button(0, 0, 64, 24);
-        selecting_trim_zone->tooltip(_("Select Trim Zone"));
-        selecting_trim_zone->label("Do Trim");
-        selecting_trim_zone->labelsize(LABEL_SIZE);
-        selecting_trim_zone->callback(cb_select_trim_zone); }
-      { trim_zone_params_group = new Fl_Pack(0, 0, 64, 136);
-        trim_zone_params_group->spacing(2);
-        { diff_trim_zone = new Fl_Light_Button(0, 0, 64, 24);
-          diff_trim_zone->tooltip(_("Even/Odd Pages use Different Trimming"));
-          diff_trim_zone->label("Evn/Odd");
-          diff_trim_zone->labelsize(LABEL_SIZE);
-          diff_trim_zone->callback(cb_diff_trim_zone_selected); }
-        { this_page_trim = new Fl_Light_Button(0, 0, 64, 24);
-          this_page_trim->tooltip(_("Specific page trim"));
-          this_page_trim->label("This Pg");
-          this_page_trim->labelsize(LABEL_SIZE);
-          this_page_trim->callback(cb_this_page_trim); }
-        { trim_pages_browser = new Fl_Select_Browser(0, 0, 64, 64); 
-          trim_pages_browser->labelsize(LABEL_SIZE);
-          trim_pages_browser->tooltip(_("Specific page trim select"));
-          trim_pages_browser->callback(cb_trim_pages_browser); }
-        { Fl_Button * clr_all_btn = new Fl_Button(0, 0, 64, 24);
-          clr_all_btn->tooltip(_("Clear all specific page trims"));
-          clr_all_btn->label("Clr All");
-          clr_all_btn->labelsize(LABEL_SIZE);
-          clr_all_btn->callback(cb_clear_all_trim_pages); }
-        trim_zone_params_group->hide();
-        trim_zone_params_group->end(); }
-      my_trim_zone_group->hide();
-      my_trim_zone_group->spacing(2);
-      my_trim_zone_group->end(); }
-    { zoom_params_group = new Fl_Pack(0, 0, 64, 118);
-      { Fl_Pack * zooms = new Fl_Pack(0, 0, 64, 32);
-        zooms->type(Fl_Pack::HORIZONTAL);
-        { Fl_Button * o = new Fl_Button(0, 0, 32, 32);
-          o->tooltip(_("Zoom in"));
-          o->callback((Fl_Callback *)cb_zoomin);
-          o->image(new Fl_PNG_Image("zoomin.png", img(zoom_in_png))); }
-        { Fl_Button * o = new Fl_Button(0, 0, 32, 32);
-          o->tooltip(_("Zoom out"));
-          o->callback((Fl_Callback *)cb_zoomout);
-          o->image(new Fl_PNG_Image("zoomout.png", img(zoom_out_png))); }
-        zooms->end();
-        zooms->show(); }
-      { selecting = new Fl_Light_Button(0, 0, 64, 38);
-        selecting->tooltip(_("Select text"));
-        selecting->align(FL_ALIGN_CENTER);
-        selecting->image(new Fl_PNG_Image("text.png", img(edit_select_all_png)));
-        selecting->callback(cb_select_text); }
-      { columns = new Fl_Choice(0, 0, 64, 24);
-        columns->tooltip(_("Number of Columns"));
-        columns->callback((Fl_Callback *)cb_columns);
-        columns->menu(menu_columns);
-        columns->value(0);
-        columns->labelsize(LABEL_SIZE);
-        columns->align(FL_ALIGN_CENTER); }
-      { title_pages = new Fl_Choice(0, 0, 64, 24);
-        title_pages->tooltip(_("Number of Title Pages"));
-        title_pages->callback((Fl_Callback *)cb_title_pages);
-        title_pages->menu(menu_title_pages);
-        title_pages->value(0);
-        title_pages->labelsize(LABEL_SIZE);
-        title_pages->align(FL_ALIGN_CENTER); }
-      zoom_params_group->spacing(4);
-      zoom_params_group->show();
-      zoom_params_group->end(); }
-    { page_moves = new Fl_Pack(0, 0, 64, 42);
-      page_moves->type(Fl_Pack::HORIZONTAL);
-      { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
-        o->tooltip(_("Beginning of Document"));
-        o->callback((Fl_Callback *)cb_page_top);
-        o->image(new Fl_PNG_Image("pagetop.png", img(go_top_png))); }
-      { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
-        o->tooltip(_("Previous Page"));
-        o->callback((Fl_Callback *)cb_page_up);
-        o->image(new Fl_PNG_Image("pageup.png", img(go_up_png))); }
-      page_moves->end();
-      page_moves->show(); }
-    { page_moves2 = new Fl_Pack(0, 0, 64, 42);
-      page_moves2->type(Fl_Pack::HORIZONTAL);
-      { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
-        o->tooltip(_("End of Document"));
-        o->callback((Fl_Callback *)cb_page_bottom);
-        o->image(new Fl_PNG_Image("pagebottom.png", img(go_bottom_png))); }
-      { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
-        o->tooltip(_("Next Page"));
-        o->callback((Fl_Callback *)cb_page_down);
-        o->image(new Fl_PNG_Image("pagedown.png", img(go_down_png))); }
-      page_moves2->end();
-      page_moves2->show(); }
-    { fullscreen_btn = new Fl_Button(0, 0, 64, 38);
-      fullscreen_btn->image(fullscreen_image);
-      fullscreen_btn->callback((Fl_Callback *)cb_fullscreen);
-      fullscreen_btn->tooltip(_("Enter Full Screen")); }
+  { buttons = new Fl_Group(0, 0, 64, 800);
+    { Fl_Pack * buttons_a = new Fl_Pack(0, 0, 64, 800-60);
+      { Fl_Box * icon_box = new Fl_Box(0, pos = 0, 64, last = 64);
+        icon_box->image(new Fl_PNG_Image("updf 64x64.png", img(updf_64x64_png))); }
+      { Fl_Button * hide_btn = new Fl_Button(0, pos += last, 64, last = 32);
+        hide_btn->tooltip(_("Hide toolbar (F8)"));
+        hide_btn->callback(cb_hide_show_buttons);
+        hide_btn->image(new Fl_PNG_Image("back.png", img(media_seek_backward_png))); }
+      { Fl_Button * open_btn = new Fl_Button(0, pos += last, 64, last = 48);
+        open_btn->tooltip(_("Open a new file"));
+        open_btn->callback((Fl_Callback *)cb_Open);
+        open_btn->image(new Fl_PNG_Image("fileopen.png", img(document_open_png))); }
+      { Fl_Button * recent_select_btn = new Fl_Button(0, pos += last, 64, last = 48);
+        recent_select_btn->tooltip(_("Open a recent file"));
+        recent_select_btn->callback((Fl_Callback *)cb_OpenRecent);
+        recent_select_btn->image(new Fl_PNG_Image("fileopen.png", img(emblem_documents_png))); }
+      { page_input = new Fl_Input(0, pos += last, 64, last = 24);
+        page_input->value("0");
+        page_input->callback((Fl_Callback *)cb_goto_page);
+        page_input->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED);
+        page_input->textsize(LABEL_SIZE); }
+      { pagectr = new Fl_Box(0, pos += last, 64, last = 24, "/ 0");
+        pagectr->tooltip(_("Document Page Count"));
+        pagectr->box(FL_ENGRAVED_FRAME);
+        pagectr->align(FL_ALIGN_WRAP);
+        pagectr->labelsize(LABEL_SIZE); }
+      { zoombar = new Fl_Input_Choice(0, pos += last, 64, last = 24);
+        zoombar->tooltip(_("Preset zoom choices"));
+        zoombar->callback((Fl_Callback *)cb_zoombar);
+        zoombar->menu(menu_zoombar);
+        zoombar->value(0);
+        zoombar->textsize(CHOICE_SIZE);
+        zoombar->input()->when(FL_WHEN_ENTER_KEY | FL_WHEN_NOT_CHANGED); }
+      { my_trim_zone_group = new Fl_Pack(0, pos += last, 64, last = 184);
+        { Fl_Box * trim_title = new Fl_Box(0, 0, 64, 24, "Trim Parameters");
+          trim_title->align(FL_ALIGN_WRAP);
+          trim_title->labelsize(9); }
+        { selecting_trim_zone = new Fl_Light_Button(0, 24, 64, 24);
+          selecting_trim_zone->tooltip(_("Select Trim Zone"));
+          selecting_trim_zone->label("Do Trim");
+          selecting_trim_zone->labelsize(LABEL_SIZE);
+          selecting_trim_zone->callback(cb_select_trim_zone); }
+        { trim_zone_params_group = new Fl_Pack(0, 48, 64, 136);
+          { diff_trim_zone = new Fl_Light_Button(0, 0, 64, 24);
+            diff_trim_zone->tooltip(_("Even/Odd Pages use Different Trimming"));
+            diff_trim_zone->label("Evn/Odd");
+            diff_trim_zone->labelsize(LABEL_SIZE);
+            diff_trim_zone->callback(cb_diff_trim_zone_selected); }
+          { this_page_trim = new Fl_Light_Button(0, 24, 64, 24);
+            this_page_trim->tooltip(_("Specific page trim"));
+            this_page_trim->label("This Pg");
+            this_page_trim->labelsize(LABEL_SIZE);
+            this_page_trim->callback(cb_this_page_trim); }
+          { trim_pages_browser = new Fl_Select_Browser(0, 48, 64, 64); 
+            trim_pages_browser->labelsize(LABEL_SIZE);
+            trim_pages_browser->tooltip(_("Specific page trim select"));
+            trim_pages_browser->callback(cb_trim_pages_browser); }
+          { Fl_Button * clr_all_btn = new Fl_Button(0, 112, 64, 24);
+            clr_all_btn->tooltip(_("Clear all specific page trims"));
+            clr_all_btn->label("Clr All");
+            clr_all_btn->labelsize(LABEL_SIZE);
+            clr_all_btn->callback(cb_clear_all_trim_pages); }
+          trim_zone_params_group->hide();
+          trim_zone_params_group->spacing(2);
+          trim_zone_params_group->end(); }
+        my_trim_zone_group->hide();
+        my_trim_zone_group->spacing(2);
+        my_trim_zone_group->end(); }
+      { zoom_params_group = new Fl_Pack(0, pos += last, 64, last = 118);
+        { Fl_Pack * zooms = new Fl_Pack(0, 0, 64, 32);
+          zooms->type(Fl_Pack::HORIZONTAL);
+          { Fl_Button * o = new Fl_Button(0, 0, 32, 32);
+            o->tooltip(_("Zoom in"));
+            o->callback((Fl_Callback *)cb_zoomin);
+            o->image(new Fl_PNG_Image("zoomin.png", img(zoom_in_png))); }
+          { Fl_Button * o = new Fl_Button(32, 0, 32, 32);
+            o->tooltip(_("Zoom out"));
+            o->callback((Fl_Callback *)cb_zoomout);
+            o->image(new Fl_PNG_Image("zoomout.png", img(zoom_out_png))); }
+          zooms->end();
+          zooms->show(); }
+        { selecting = new Fl_Light_Button(0, 32, 64, 38);
+          selecting->tooltip(_("Select text"));
+          selecting->align(FL_ALIGN_CENTER);
+          selecting->image(new Fl_PNG_Image("text.png", img(edit_select_all_png)));
+          selecting->callback(cb_select_text); }
+        { columns = new Fl_Choice(0, 70, 64, 24);
+          columns->tooltip(_("Number of Columns"));
+          columns->callback((Fl_Callback *)cb_columns);
+          columns->menu(menu_columns);
+          columns->value(0);
+          columns->labelsize(LABEL_SIZE);
+          columns->align(FL_ALIGN_CENTER); }
+        { title_pages = new Fl_Choice(0, 94, 64, 24);
+          title_pages->tooltip(_("Number of Title Pages"));
+          title_pages->callback((Fl_Callback *)cb_title_pages);
+          title_pages->menu(menu_title_pages);
+          title_pages->value(0);
+          title_pages->labelsize(LABEL_SIZE);
+          title_pages->align(FL_ALIGN_CENTER); }
+        zoom_params_group->spacing(4);
+        zoom_params_group->show();
+        zoom_params_group->end(); }
+      { page_moves = new Fl_Pack(0, pos += last, 64, last = 42);
+        page_moves->type(Fl_Pack::HORIZONTAL);
+        { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
+          o->tooltip(_("Beginning of Document"));
+          o->callback((Fl_Callback *)cb_page_top);
+          o->image(new Fl_PNG_Image("pagetop.png", img(go_top_png))); }
+        { Fl_Button * o = new Fl_Button(32, 0, 32, 42);
+          o->tooltip(_("Previous Page"));
+          o->callback((Fl_Callback *)cb_page_up);
+          o->image(new Fl_PNG_Image("pageup.png", img(go_up_png))); }
+        page_moves->end();
+        page_moves->show(); }
+      { page_moves2 = new Fl_Pack(0, pos += last, 64, last = 42);
+        page_moves2->type(Fl_Pack::HORIZONTAL);
+        { Fl_Button * o = new Fl_Button(0, 0, 32, 42);
+          o->tooltip(_("End of Document"));
+          o->callback((Fl_Callback *)cb_page_bottom);
+          o->image(new Fl_PNG_Image("pagebottom.png", img(go_bottom_png))); }
+        { Fl_Button * o = new Fl_Button(32, 0, 32, 42);
+          o->tooltip(_("Next Page"));
+          o->callback((Fl_Callback *)cb_page_down);
+          o->image(new Fl_PNG_Image("pagedown.png", img(go_down_png))); }
+        page_moves2->end();
+        page_moves2->show(); }
+      { fullscreen_btn = new Fl_Button(0, pos += last, 64, last = 38);
+        fullscreen_btn->image(fullscreen_image);
+        fullscreen_btn->callback((Fl_Callback *)cb_fullscreen);
+        fullscreen_btn->tooltip(_("Enter Full Screen")); }
 
-    #if DEBUGGING && 0
-      { debug1 = new Fl_Box(0, 0, 64, 32, "");
-        debug1->align(FL_ALIGN_WRAP); }
-      { debug2 = new Fl_Box(0, 0, 64, 32, "");
-        debug2->align(FL_ALIGN_WRAP); }
-      { debug3 = new Fl_Box(0, 0, 64, 32, "");
-        debug3->align(FL_ALIGN_WRAP); }
-      { debug4 = new Fl_Box(0, 0, 64, 32, "");
-        debug4->align(FL_ALIGN_WRAP); }
-      { debug5 = new Fl_Box(0, 0, 64, 32, "");
-        debug5->align(FL_ALIGN_WRAP); }
-      { debug6 = new Fl_Box(0, 0, 64, 32, "");
-        debug6->align(FL_ALIGN_WRAP); }
-      { debug7 = new Fl_Box(0, 0, 64, 32, "");
-        debug7->align(FL_ALIGN_WRAP); }
-    #endif
+      #if DEBUGGING && 0
+        { debug1 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug1->align(FL_ALIGN_WRAP); }
+        { debug2 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug2->align(FL_ALIGN_WRAP); }
+        { debug3 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug3->align(FL_ALIGN_WRAP); }
+        { debug4 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug4->align(FL_ALIGN_WRAP); }
+        { debug5 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug5->align(FL_ALIGN_WRAP); }
+        { debug6 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug6->align(FL_ALIGN_WRAP); }
+        { debug7 = new Fl_Box(0, pos += last, 64, last = 32, "");
+          debug7->align(FL_ALIGN_WRAP); }
+      #endif
 
-    { Fl_Box * fill_box = new Fl_Box(0, 0, 64, 0, "");
-      fill_box->box(FL_ENGRAVED_FRAME);
-      buttons->resizable(fill_box); }
-    { Fl_Button * exitbtn = new Fl_Button(0, 0, 64, 38);
-      exitbtn->callback((Fl_Callback *)cb_exit);
-      exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
-      exitbtn->tooltip(_("Exit")); }
+      { Fl_Box * fill_box = new Fl_Box(0, pos += last, 64, last = 32, "");
+        fill_box->box(FL_ENGRAVED_FRAME);
+        buttons_a->resizable(fill_box); }
+      // { Fl_Button * exitbtn = new Fl_Button(0, pos += last + 32, 64, last = 38);
+      //   exitbtn->callback((Fl_Callback *)cb_exit);
+      //   exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
+      //   exitbtn->tooltip(_("Exit")); }
+      
+      buttons_a->end();
+      buttons_a->show();
+      buttons->resizable(buttons_a); 
+      buttons_a->spacing(4);
+    }
+
+    { Fl_Pack * buttons_b = new Fl_Pack(0, 800-38, 64, 38);
+      { Fl_Button * exitbtn = new Fl_Button(0, 0, 64, 38);
+        exitbtn->callback((Fl_Callback *)cb_exit);
+        exitbtn->image(new Fl_PNG_Image("exit.png", img(application_exit_png)));
+        exitbtn->tooltip(_("Exit")); }
+      buttons_b->end();
+      buttons_b->show(); }
     buttons->end();
-    buttons->show(); 
+    buttons->show();
   }
-
   { show_btn = new Fl_Button(0, 0, 6, 800);
     show_btn->hide();
     show_btn->callback(cb_hide_show_buttons);
@@ -800,8 +810,6 @@ int main(int argc, char **argv)
   // win->size(Fl::w() * 0.4f, Fl::h() * 0.9f);
 
   load_config();
-
-  update_buttons();
 
   if (loadfile(optind < argc ? argv[optind] : NULL, recent_files)) {
     file_loaded();

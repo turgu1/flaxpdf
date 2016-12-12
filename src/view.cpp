@@ -31,6 +31,9 @@ as required by the user.
 #define MARGINHALF 18
 
 PDFView::PDFView(int x, int y, int w, int h): Fl_Widget(x, y, w, h),
+    view_zoom(0.5f),
+    left_dclick_columns_count(2),
+    right_dclick_columns_count(5),
     text_selection(false), 
     trim_zone_selection(false), 
     single_page_trim(false),
@@ -126,9 +129,7 @@ void PDFView::trim_zone_different(bool diff)
 
 void PDFView::remove_single_page_trim(s32 page)
 {
-  single_page_trim_struct *prev, *curr;
-
-  debug("Removing page %d form single page trims\n", page);
+  single_page_trim_struct *prev, *curr, *next;
 
   prev = NULL;
   curr = my_trim.singles;
@@ -138,11 +139,14 @@ void PDFView::remove_single_page_trim(s32 page)
   }
   
   if (curr && (curr->page == page)) {
+    next = curr->next;
+    free(curr);
+
     if (prev) {
-      prev->next = curr->next;
+      prev->next = next;
     }
     else {
-      my_trim.singles = curr->next;
+      my_trim.singles = next;
     }
   }
 }
@@ -175,11 +179,22 @@ void PDFView::add_single_page_trim(s32 page, s32 X, s32 Y, s32 W, s32 H)
   curr->page_trim.H = H;
 }
 
+void PDFView::clear_all_single_trims() 
+{
+  clear_singles(my_trim);
+}
+
 void PDFView::this_page_trim(bool this_page)
 {
+  s32 page = yoff;
+
   single_page_trim = this_page;
-  if (!single_page_trim) {
-    s32 page = yoff;
+  
+  if (single_page_trim) {
+    trim_struct & trim = (page & 1) ? my_trim.even : my_trim.odd;
+    add_single_page_trim(page, trim.X, trim.Y, trim.W, trim.H);
+  }
+  else {
     remove_single_page_trim(page);
     page_changed();
   }
@@ -194,10 +209,10 @@ void PDFView::text_select(bool do_select)
   redraw();
 }
 
-void PDFView::reset_selection() 
+void PDFView::reset_selection(bool anyway) 
 {
-  if (!trim_zone_selection) {
-    selx = sely = selx2 = sely2 = 0;
+  if (anyway || !trim_zone_selection) {
+    savedx = savedy = selx = sely = selx2 = sely2 = 0;
   }
 }
 
@@ -293,12 +308,16 @@ void PDFView::set_params(recent_file_struct &recent)
   view_mode   = recent.view_mode;
   title_pages = recent.title_page_count;
 
+  zoom(recent.zoom);
+
   clear_my_trim();
   my_trim     = recent.my_trim;
 
   copy_singles(recent.my_trim, my_trim);
 
-  show_trim();
+  #if DEBUGGING
+    show_trim();
+  #endif
 
   set_columns(recent.columns); 
   goto_page(yoff);
@@ -357,26 +376,40 @@ const trim_struct * PDFView::get_trimming_for_page(s32 page) const
   return result;
 }
 
+void PDFView::mode(view_mode_enum m)
+{
+  view_mode = m;
+  if (m != Z_MYTRIM) {
+    trim_zone_selection = false;
+  }
+  reset_selection(true);
+}
+
 u32 PDFView::pageh(u32 page) const 
 {
   if (!file->cache[page].ready) page = 0;
 
+  s32 h;
+
   if (view_mode == Z_TRIM || view_mode == Z_PGTRIM) {
-    return file->cache[page].h;
+    h = file->cache[page].h;
   }
   else if (view_mode == Z_MYTRIM && !trim_zone_selection) {
     if (my_trim.initialized) {
       const trim_struct * the_trim = get_trimming_for_page(page);
-      return  the_trim->H;
+      h = the_trim->H;
     }
-    else
+    else {
       return file->cache[page].h;
+    }
   }
   else { // Z_PAGE || Z_WIDTH || Z_CUSTOM || (Z_MYTRIM && trim_zone_selection)
     return  file->cache[page].h +
         file->cache[page].top   +
         file->cache[page].bottom;
   }
+
+  return h < 2*MARGIN ? h + MARGIN : h;
 }
 
 u32 PDFView::pagew(u32 page) const 
@@ -465,27 +498,6 @@ u32 PDFView::fullw(u32 page) const
     fw += pagew(i < limit ? i : 0);
   }
   
-  // if (view_mode == Z_TRIM || view_mode == Z_PGTRIM || (view_mode == Z_MYTRIM && !trim_zone_selection)) {
-  //   for (i = page; i < (page + columns); i++) {
-  //     if (file->cache[i].ready && (i < limit))
-  //       fw += file->cache[i].w;
-  //     else
-  //       fw += file->cache[0].w;
-  //   }
-  // }
-  // else {
-  //   for (i = page; i < (page + columns); i++) {
-  //     if (file->cache[i].ready && (i < limit)) 
-  //       fw += file->cache[i].w    +
-  //           file->cache[i].left +
-  //           file->cache[i].right;
-  //     else
-  //       fw += file->cache[0].w    +
-  //           file->cache[0].left +
-  //           file->cache[0].right;
-  //   }
-  // }
-
   // Add the margins between columns
   return fw + (columns - 1) * MARGINHALF;
 }
@@ -532,37 +544,33 @@ float PDFView::line_zoom_factor(const u32 first_page, u32 &width, u32 &height) c
       }
       break;
     default:
-      zoom_factor = file->zoom;
+      zoom_factor = view_zoom;
       break;
   }
 
   width  = line_width;
   height = line_height;
 
-  file->zoom = zoom_factor;
-
   return zoom_factor;
 }
 
-void PDFView::update_visible(const bool fromdraw) const 
+void PDFView::update_visible() const 
 {
   // From the current zoom mode and view offset, update the visible page info
   // Will adjust the following parameters:
   //
   // - file->first_visible
   // - file->last_visible
-  // - page_input->value <- current visible page number in the upper left of the screen
   //
   // This method as been extensively modified to take into account multicolumns
   // and the fact that no page will be expected to be of the same size as the others,
   // both for vertical and horizontal limits. Because of these constraints, the
   // zoom factor cannot be applied to the whole screen but for each "line" of
   // pages.
-
-  const u32 prev = file->first_visible;
-
+  // 
   // Those are very very conservative numbers to compute last_visible. 
   // The end of the draw process will adjust precisely the value
+
   static const u32 max_lines_per_screen[MAX_COLUMNS_COUNT] = { 2, 3, 4, 5, 6 };
 
   // Adjust file->first_visible
@@ -581,19 +589,6 @@ void PDFView::update_visible(const bool fromdraw) const
   else {
     file->last_visible = new_last_visible;
   }
-
-  // If position has changed:
-  //    - update current page visible number in the page_input
-  //    - request a redraw (if not already called by draw...)
-  if (prev != file->first_visible) {
-    char buf[10];
-    snprintf(buf, 10, "%u", file->first_visible + 1);
-    page_input->value(buf);
-
-    if (!fromdraw) page_input->redraw();
-
-    Fl::check();
-  }
 }
 
 // Compute the vertical screen size of a line of pages
@@ -611,7 +606,7 @@ void PDFView::draw()
   if (!file->cache) return;
 
   compute_screen_size();
-  update_visible(true);
+  update_visible();
 
   const Fl_Color pagecol = FL_WHITE;
   int X, Y, W, H;
@@ -667,6 +662,10 @@ void PDFView::draw()
       /* out */ line_width, 
       /* out */ line_height);
 
+    if (first_line) {
+        view_zoom = zoom;
+    }
+
     const int zoomedmargin     = zoom * MARGIN;
     const int zoomedmarginhalf = zoomedmargin / 2;
 
@@ -703,7 +702,7 @@ void PDFView::draw()
       // Paint the page backgroud rectangle, save coordinates for next loop
       fl_rectf(Xs = X, Ys = Y, Ws = W, Hs = H, pagecol);
 
-      #if DEBUGGING
+      #if DEBUGGING && 0
         if (first_page) {
           debug("Zoom factor: %f\n", zoom);
           debug("Page data: Left: %d Right: %d Top: %d Bottom: %d W: %d H: %d\n",
@@ -725,19 +724,21 @@ void PDFView::draw()
 
         const trim_struct * the_trim = get_trimming_for_page(page);
 
-        s32 w, h;
+        s32 w, h, th;
         float zw, zh;
+
+        th = the_trim->H < 2*MARGIN ? the_trim->H + MARGIN : the_trim->H;
 
         fl_push_clip(
           Xs + zoomedmarginhalf, 
           Ys + zoomedmarginhalf, 
           w = zoom * the_trim->W - zoomedmargin, 
-          h = zoom * the_trim->H - zoomedmargin);
+          h = zoom * th - zoomedmargin);
 
         ratio_x = w / (float)(w + zoomedmargin);
         ratio_y = h / (float)(h + zoomedmargin);
 
-        debug("Ratio: %f %f (%d %d)\n", ratio_x, ratio_y, w, h);
+        //debug("Ratio: %f %f (%d %d)\n", ratio_x, ratio_y, w, h);
 
         zw = ratio_x * zoom;
         zh = ratio_y * zoom;
@@ -748,7 +749,7 @@ void PDFView::draw()
         W = zw * cur->w;
         H = zh * cur->h;
 
-        #if DEBUGGING
+        #if DEBUGGING && 0
           if (first_page) {
             debug("My Trim: X: %d Y: %d W: %d H: %d\n",
               the_trim->X,
@@ -781,7 +782,7 @@ void PDFView::draw()
       }
 
       // Render real content
-      #if DEBUGGING
+      #if DEBUGGING && 0
         if (first_page) {
           debug("Drawing page %d: X: %d, Y: %d, W: %d, H: %d\n", page, X, Y, W, H);
         }
@@ -1012,7 +1013,7 @@ void PDFView::adjust_floor_yoff(float offset)
   yoff = new_yoff;
 }
 
-void PDFView::select_page_at(s32 X, s32 Y, bool two_columns)
+void PDFView::select_page_at(s32 X, s32 Y, bool right_dclick)
 {
   u32 idx = 0;
   page_pos_struct *pp = page_pos_on_screen;
@@ -1029,7 +1030,14 @@ void PDFView::select_page_at(s32 X, s32 Y, bool two_columns)
   }
   if (idx >= page_pos_count) return; // Not found
 
-  set_columns(two_columns ? 2 : 1);
+  if (right_dclick) {
+    if (columns != right_dclick_columns_count) {
+      left_dclick_columns_count = columns;
+    }
+  }
+  set_columns(right_dclick ? 
+                 right_dclick_columns_count : 
+                (trim_zone_selection ? 1 : left_dclick_columns_count));
   goto_page(pp->page);
 }
 
@@ -1104,8 +1112,7 @@ void PDFView::end_of_selection()
     if ((Y + H) > (pp->Y0 + pp->H0)) {
       H = pp->Y0 + pp->H0 - Y;
     }
-    if (((X + W) < pp->X0) ||
-      ((Y + H) < pp->Y0)) {
+    if (((X + W) < pp->X0) || ((Y + H) < pp->Y0)) {
       redraw();
       return; // Out of the printed area
     }
@@ -1156,7 +1163,6 @@ void PDFView::end_of_selection()
   }
   else if (trim_zone_selection) {
     if (single_page_trim) {
-      debug("Adding a single page trim for page %d\n", pp->page);
       add_single_page_trim(pp->page, X, Y, W, H);	
     }
     else {
@@ -1181,7 +1187,6 @@ void PDFView::end_of_selection()
       //fl_message("X: %d, Y: %d, W: %d, H: %d", X, Y, W, H);
       my_trim.initialized = true;
     }
-    debug("Selection: X: %d, Y: %d, W: %d, H: %d\n", X, Y, W, H);
   }
 }
 
@@ -1217,36 +1222,18 @@ void PDFView::page_bottom()
 trim_zone_loc_enum PDFView::get_trim_zone_loc(s32 x, s32 y) const
 {
 	if (x > (selx - 5) && x < (selx + 5)) {
-		if (y > (sely - 5) && y < (sely + 5)) {
-			return TZL_NW;
-		}
-		else if (y > (sely2 - 5) && y < (sely2 + 5)) {
-			return TZL_SW;
-		}
-		else {
-			return TZL_W;
-		}
+		if      (y > (sely  - 5) && y < (sely  + 5)) return TZL_NW;
+		else if (y > (sely2 - 5) && y < (sely2 + 5)) return TZL_SW;
+		else                                         return TZL_W;
 	}
 	else if (x > (selx2 - 5) && x < (selx2 + 5)) {
-		if (y > (sely - 5) && y < (sely + 5)) {
-			return TZL_NE;
-		}
-		else if (y > (sely2 - 5) && y < (sely2 + 5)) {
-			return TZL_SE;
-		}
-		else {
-			return TZL_E;
-		}
+		if      (y > (sely  - 5) && y < (sely + 5 )) return TZL_NE;
+		else if (y > (sely2 - 5) && y < (sely2 + 5)) return TZL_SE;
+		else                                         return TZL_E;
 	}
-	else if (y > (sely - 5) && y < (sely + 5)) {
-		return TZL_N;
-	}
-	else if (y > (sely2 - 5) && y < (sely2 + 5)) {
-		return TZL_S;
-	}
-	else {
-		return TZL_NONE;
-	}
+	else if (y > (sely  - 5) && y < (sely  + 5))   return TZL_N;
+	else if (y > (sely2 - 5) && y < (sely2 + 5))   return TZL_S;
+	else                                           return TZL_NONE;
 }
 
 int PDFView::handle(int e) 
@@ -1262,30 +1249,36 @@ int PDFView::handle(int e)
   zoom = line_zoom_factor(yoff, line_width, line_height);
 
   static int lasty, lastx;
+  static bool some_drag = false;
   const float move = 0.05f;
 
   switch (e) {
     case FL_RELEASE:
       // Was this a dragging text selection?
-      if ((text_selection || trim_zone_selection) && Fl::event_button() == FL_LEFT_MOUSE &&
-        selx && sely && selx2 && sely2 && selx != selx2 &&
-        sely != sely2) {
+      if ((text_selection || trim_zone_selection) && (Fl::event_button() == FL_LEFT_MOUSE) && 
+          selx && sely && selx2 && sely2) {
+        if ((selx != selx2) && (sely != sely2) && some_drag) {
 
-    		if (trim_zone_selection) {
-    			// fl_overlay_clear();
-    			s32 tmp;
-    			if (selx > selx2) {
-    			  tmp   = selx;
-    			  selx  = selx2;
-    			  selx2 = tmp;
-    			}
-    			if (sely > sely2) {
-    			  tmp   = sely;
-    			  sely  = sely2;
-    			  sely2 = tmp;
-    			}
-    		}
-        end_of_selection();
+      		if (trim_zone_selection) {
+      			// fl_overlay_clear();
+      			s32 tmp;
+      			if (selx > selx2) {
+      			  tmp   = selx;
+      			  selx  = selx2;
+      			  selx2 = tmp;
+      			}
+      			if (sely > sely2) {
+      			  tmp   = sely;
+      			  sely  = sely2;
+      			  sely2 = tmp;
+      			}
+      		}
+          end_of_selection();
+        }
+        if (trim_zone_selection && !some_drag) {
+          selx = savedx;
+          sely = savedy;
+        }
       }
       break;
       
@@ -1294,28 +1287,37 @@ int PDFView::handle(int e)
       lasty = Fl::event_y();
       lastx = Fl::event_x();
 
-      reset_selection();
-
       if (Fl::event_button() == FL_LEFT_MOUSE) {
+        some_drag = false;
         if (Fl::event_clicks()) {
           select_page_at(lastx, lasty, Fl::event_ctrl());
         } 
-        else if (text_selection) {
-          selx = lastx;
-          sely = lasty;
-          redraw();
-        }
         else {
-          if (trim_zone_selection) {
+          if (text_selection) {
+            reset_selection();
+
+            selx   = lastx;
+            sely   = lasty;
+            redraw();
+          }
+          else if (trim_zone_selection) {
+            savedx = selx;
+            savedy = sely;
+            reset_selection();
+
             trim_zone_loc_enum trim_zone_loc = get_trim_zone_loc(Fl::event_x(), Fl::event_y());
             if (trim_zone_loc == TZL_NONE) {
-              selx = lastx;
-              sely = lasty;   	
+              selx   = lastx;
+              sely   = lasty;   	
             }
           }
         }
       }
-
+      else if (Fl::event_button() == FL_RIGHT_MOUSE) {
+        if (Fl::event_clicks()) {
+          select_page_at(lastx, lasty, true);
+        }
+      }
 
       // Fall-through
     case FL_FOCUS:
@@ -1330,13 +1332,15 @@ int PDFView::handle(int e)
         const int movedy = my - lasty;
         const int movedx = mx - lastx;
 
-        if (text_selection && Fl::event_button() == FL_LEFT_MOUSE) {
-          selx2 = mx;
-          sely2 = my;
-          redraw();
-          return 1;
-        }
-        else if (trim_zone_selection && Fl::event_button() == FL_LEFT_MOUSE) {
+        if (Fl::event_button() == FL_LEFT_MOUSE) {
+          some_drag = true;
+          if (text_selection) {
+            selx2 = mx;
+            sely2 = my;
+            redraw();
+            return 1;
+          }
+          else if (trim_zone_selection) {
             switch (trim_zone_loc) {
               case TZL_NE: 	selx2 = mx; sely  = my; break;
               case TZL_NW:  selx  = mx; sely  = my; break;
@@ -1351,8 +1355,8 @@ int PDFView::handle(int e)
             }	
             window()->make_current();	
           	fl_overlay_rect(selx, sely, selx2 - selx, sely2 - sely);
-          	
             return 1;
+          }
         }
 
         fl_cursor(FL_CURSOR_MOVE);
@@ -1384,12 +1388,16 @@ int PDFView::handle(int e)
       
     case FL_MOUSEWHEEL:
       if (Fl::event_ctrl()) {
+        view_mode = Z_CUSTOM;
         if (Fl::event_dy() > 0){
-          cb_Zoomout(NULL, NULL);
+          view_zoom *= 0.833333f;
+          if (view_zoom < 0.1f) view_zoom = 0.1f;
         }
         else{
-          cb_Zoomin(NULL, NULL);
+          view_zoom *= 1.2f;
+          if (view_zoom > 10.0f) view_zoom = 10.0f;
         }
+        update_buttons();
       }
       else{
         adjust_yoff(move * Fl::event_dy());
@@ -1520,7 +1528,7 @@ int PDFView::handle(int e)
       } // switch (Fl::event_key())
 
       if (file->cache) {
-        update_visible(false);
+        update_visible();
       }
 
       return 1;

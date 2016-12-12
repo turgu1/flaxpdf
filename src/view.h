@@ -60,14 +60,23 @@ public:
 
   void goto_page(const float page);
   void reset();
-  void reset_selection();
   void text_select(bool do_select);
   void trim_zone_select(bool do_select);
   void trim_zone_different(bool diff);
   void this_page_trim(bool this_page);
+  void clear_all_single_trims();
   void set_columns(u32 count);
   void set_title_page_count(u32 count);
-  inline void mode(view_mode_enum m) { view_mode = m; };
+  void set_params(recent_file_struct &recent);
+  void new_file_loaded();
+  void page_up();
+  void page_down();
+  void page_top();
+  void page_bottom();
+
+  void mode(view_mode_enum m);
+  inline float zoom() { return view_zoom; };
+  inline void  zoom(float zoom) { view_zoom = zoom > 0.1f ? (zoom < 10.0f ? zoom : 10.0f) : 0.1f; };
   inline view_mode_enum  mode() { return view_mode; };
   inline float get_xoff() { return xoff; };
   inline float get_yoff() { return yoff; };
@@ -75,19 +84,15 @@ public:
   inline u32   get_title_page_count() { return title_pages; };
   inline my_trim_struct & get_my_trim() { return my_trim; };
   inline bool is_single_page_trim() { return single_page_trim; };
-  void set_params(recent_file_struct &recent);
-  void new_file_loaded();
-  void page_up();
-  void page_down();
-  void page_top();
-  void page_bottom();
+
 private:
-  void  select_page_at(s32 X, s32 Y, bool two_columns);
+  void  reset_selection(bool anyway = false);
+  void  select_page_at(s32 X, s32 Y, bool right_dclick);
   void  page_changed();
   void  clear_my_trim();
   void  compute_screen_size();
   float line_zoom_factor(u32 first_page, u32 &width,u32 &height) const;
-  void  update_visible(const bool fromdraw) const;
+  void  update_visible() const;
   u8    iscached(const u32 page) const;
   void  docache(const u32 page);
   float maxyoff() const;
@@ -106,6 +111,8 @@ private:
   u32   fullh(u32 page) const;
   u32   fullw(u32 page) const;
 
+  float  view_zoom;
+  u32    left_dclick_columns_count, right_dclick_columns_count;
   bool   text_selection;
   bool   trim_zone_selection;
   bool   single_page_trim;
@@ -121,13 +128,11 @@ private:
   u32    page_pos_count;
 
   // Text selection coords
-  u16 selx, sely, selx2, sely2;
+  u16 selx, sely, selx2, sely2, savedx, savedy;
   u32 columns, title_pages;
 
   s32 screen_x, screen_y, screen_width, screen_height;
   my_trim_struct my_trim;
 };
-
-extern PDFView *view;
 
 #endif

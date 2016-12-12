@@ -57,24 +57,14 @@ Modifications Copyright (C) 2016 Guy Turcotte
 #include "view.h"
 #include "helpers.h"
 
-extern Fl_Double_Window * win;
-extern Fl_Box           * pagectr;
-extern Fl_Input         * page_input;
-extern Fl_Input_Choice  * zoombar;
+extern Fl_Box * debug1, 
+              * debug2, 
+              * debug3, 
+              * debug4, 
+              * debug5, 
+              * debug6, 
+              * debug7;
 
-extern Fl_Light_Button  * selecting,
-                        * selecting_trim_zone,
-                        * diff_trim_zone,
-                        * this_page_trim;
-
-extern Fl_Group         * buttons;
-extern Fl_Box           * debug1, 
-                        * debug2, 
-                        * debug3, 
-                        * debug4, 
-                        * debug5, 
-                        * debug6, 
-                        * debug7;
 extern u8 details;
 
 extern int writepipe;
@@ -84,14 +74,14 @@ bool loadfile(const char *, recent_file_struct * recent_files);
 const int MAX_COLUMNS_COUNT = 5;
 
 struct cachedpage {
-  u8 *data;
-  u32 size;
-  u32 uncompressed;
+  u8  * data;
+  u32   size;
+  u32   uncompressed;
 
-  u32 w, h;
-  u16 left, right, top, bottom;
+  u32   w, h;
+  u16   left, right, top, bottom;
 
-  bool ready;
+  bool  ready;
 };
 
 enum msg {
@@ -100,25 +90,24 @@ enum msg {
 };
 
 struct openfile {
-  char * filename;
-  cachedpage *cache;
-  PDFDoc *pdf;
-  u32 maxw, maxh;
+  char       * filename;
+  cachedpage * cache;
+  PDFDoc     * pdf;
+  u32          maxw, maxh;
 
-  u32 pages;
+  u32          pages;
 
-  u32 first_visible;
-  u32 last_visible;
+  u32          first_visible;
+  u32          last_visible;
 
-  float zoom;
-  pthread_t tid;
+  pthread_t    tid;
 };
 
 extern openfile * file;
 
-void cb_Zoomin(Fl_Button *, void *);
-void cb_Zoomout(Fl_Button *, void *);
 void cb_hide_show_buttons(Fl_Widget *, void *);
 void update_buttons();
+
+#define FL_NONO_FONT FL_FREE_FONT
 
 #endif
